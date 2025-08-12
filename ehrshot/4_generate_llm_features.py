@@ -5,7 +5,9 @@ from loguru import logger
 from utils import check_file_existence_and_handle_force_refresh
 from typing import Dict, List, Tuple
 import numpy as np
-from serialization.text_encoder import TextEncoder, LLM2VecLlama3_1_7B_InstructSupervisedEncoder, GTEQwen2_7B_InstructEncoder, GTEQwen2_1_5B_InstructEncoder, STGTELargeENv15Encoder, BertEncoder, LLM2VecLlama2_Sheared_1_3B_SupervisedEncoder, GTEQwen2_7B_InstructChunkedEncoder, LLM2VecLlama3_1_7B_InstructSupervisedChunkedEncoder
+# NOTE: workaround for LLM2Vec models that are not compatible with most recent transformers library for ModernBERT, Qwen3
+# from serialization.text_encoder import LLM2VecLlama2_Sheared_1_3B_SupervisedEncoder, LLM2VecLlama3_1_7B_InstructSupervisedEncoder, LLM2VecLlama3_1_7B_InstructSupervisedChunkedEncoder
+from serialization.text_encoder import TextEncoder,  GTEQwen2_7B_InstructEncoder, GTEQwen2_1_5B_InstructEncoder, STGTELargeENv15Encoder, BertEncoder, GTEQwen2_7B_InstructChunkedEncoder, Qwen3Embedding_8B_Encoder, Qwen3Embedding_4B_Encoder, Qwen3Embedding_0_6B_Encoder
 from serialization.ehr_serializer import UniqueThenListVisitsStrategy, UniqueThenListVisitsWithValuesStrategy, UniqueThenListVisitsWOAllCondsStrategy, UniqueThenListVisitsWOAllCondsWithValuesStrategy
 from datetime import datetime, timedelta
 from llm_featurizer import LLMFeaturizer, preprocess_llm_featurizer, featurize_llm_featurizer, load_labeled_patients_with_tasks
@@ -96,16 +98,20 @@ if __name__ == "__main__":
     
     # Mapping of text encoder names to their corresponding classes
     encoder_mapping = {
-        'llm2vec_llama3_1_7b_instruct_supervised': LLM2VecLlama3_1_7B_InstructSupervisedEncoder,
-        'llm2vec_llama3_1_7b_instruct_supervised_chunked_2k': lambda max_input_length: LLM2VecLlama3_1_7B_InstructSupervisedChunkedEncoder(max_input_length=2048),
-        'llm2vec_llama3_1_7b_instruct_supervised_chunked_1k': lambda max_input_length: LLM2VecLlama3_1_7B_InstructSupervisedChunkedEncoder(max_input_length=1024),
-        'llm2vec_llama3_1_7b_instruct_supervised_chunked_512': lambda max_input_length: LLM2VecLlama3_1_7B_InstructSupervisedChunkedEncoder(max_input_length=512),
-        'llm2vec_llama2_sheared_1_3b_supervised': LLM2VecLlama2_Sheared_1_3B_SupervisedEncoder,
+        # NOTE: workaround for LLM2Vec models that are not compatible with most recent transformers library for ModernBERT, Qwen3
+        # 'llm2vec_llama3_1_7b_instruct_supervised': LLM2VecLlama3_1_7B_InstructSupervisedEncoder,
+        # 'llm2vec_llama3_1_7b_instruct_supervised_chunked_2k': lambda max_input_length: LLM2VecLlama3_1_7B_InstructSupervisedChunkedEncoder(max_input_length=2048),
+        # 'llm2vec_llama3_1_7b_instruct_supervised_chunked_1k': lambda max_input_length: LLM2VecLlama3_1_7B_InstructSupervisedChunkedEncoder(max_input_length=1024),
+        # 'llm2vec_llama3_1_7b_instruct_supervised_chunked_512': lambda max_input_length: LLM2VecLlama3_1_7B_InstructSupervisedChunkedEncoder(max_input_length=512),
+        # 'llm2vec_llama2_sheared_1_3b_supervised': LLM2VecLlama2_Sheared_1_3B_SupervisedEncoder,
         'gteqwen2_7b_instruct': GTEQwen2_7B_InstructEncoder,
         'gteqwen2_7b_instruct_chunked_2k': lambda max_input_length: GTEQwen2_7B_InstructChunkedEncoder(max_input_length=2048),
         'gteqwen2_7b_instruct_chunked_1k': lambda max_input_length: GTEQwen2_7B_InstructChunkedEncoder(max_input_length=1024),
         'gteqwen2_7b_instruct_chunked_512': lambda max_input_length: GTEQwen2_7B_InstructChunkedEncoder(max_input_length=512),
         'gteqwen2_1_5b_instruct': GTEQwen2_1_5B_InstructEncoder,
+        'qwen3_embedding_8b': Qwen3Embedding_8B_Encoder,
+        'qwen3_embedding_4b': Qwen3Embedding_4B_Encoder,
+        'qwen3_embedding_0_6b': Qwen3Embedding_0_6B_Encoder,
         'st_gte_large_en_v15': STGTELargeENv15Encoder,
         'bioclinicalbert': lambda max_input_length: BertEncoder(max_input_length=max_input_length, bert_identifier='emilyalsentzer/Bio_ClinicalBERT', embedding_size=768, model_max_input_length=512), 
         'bert_base': lambda max_input_length: BertEncoder(max_input_length=max_input_length, bert_identifier='bert-base-uncased', embedding_size=768, model_max_input_length=512),

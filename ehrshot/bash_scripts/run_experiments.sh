@@ -1,6 +1,6 @@
 # Options
 num_threads=40
-EHRSHOT_ENV="EHRSHOT_ENV"
+EHRSHOT_ENV="EHRSHOT_ENV_QWEN3" # Set to EHRSHOT_ENV_QWEN3 for Qwen3, EHRSHOT_ENV for Llama3 and GteQwen2
 source activate $EHRSHOT_ENV
 
 # Paths
@@ -26,6 +26,9 @@ text_encoders=(
     # "gteqwen2_7b_instruct_chunked_1k"
     # "gteqwen2_7b_instruct_chunked_512"
     # "gteqwen2_1_5b_instruct"
+    "qwen3_embedding_0_6b"
+    # "qwen3_embedding_8b"
+    # "qwen3_embedding_4b"
     # "bioclinicalbert"
     # "deberta_v3_base"
     # "deberta_v3_large"
