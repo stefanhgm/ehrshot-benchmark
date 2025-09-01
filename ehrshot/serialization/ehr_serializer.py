@@ -416,11 +416,17 @@ class SerializationStrategy(ABC):
             
         return result
 
-    def serialize_aggregated_events_list(self, aggregated_events, num_values, include_date=False):
+    def serialize_aggregated_events_list(self, aggregated_events, num_values, ablation: list[str] = [],     
+                                         include_date=False) -> str:
         serialization = []
         aggregated_events_recent = get_special_events_most_recent(aggregated_events)
         
         for sub_list in ['Body Metrics', 'Vital Signs', 'Lab Results']:
+            # Ablation: skip some aggregated events
+            if sub_list == 'Body Metrics' and 'no_aggregated_body_metrics' in ablation or \
+                sub_list == 'Vital Signs' and 'no_aggregated_vital_signs' in ablation or \
+                sub_list == 'Lab Results' and 'no_aggregated_lab_results' in ablation:
+                 continue
             serialization.append(AGGREGATED_SUB_EVENTS[sub_list]['heading'])
             event_types = AGGREGATED_SUB_EVENTS[sub_list]['events']
             for event_type in event_types:
@@ -535,7 +541,7 @@ class SerializationStrategy(ABC):
         aggr_events_serialization = ""
         if 'no_aggregated_events' not in ablation:
             if num_aggregated_events > 0:
-                aggr_events_serialization = self.serialize_aggregated_events_list(ehr_serializer.aggregated_events, num_aggregated_events)
+                aggr_events_serialization = self.serialize_aggregated_events_list(ehr_serializer.aggregated_events, num_aggregated_events, ablation)
         
         # Add visits
         visits_serialization = ""
@@ -647,7 +653,10 @@ class UniqueThenListVisitsWOAllCondsWithValuesStrategy(SerializationStrategy):
             ehr_serializer.static_events = [e for e in ehr_serializer.static_events if e.code.split('/')[0] not in ['RxNorm', 'RxNorm Extension']]
         if 'no_procedures' in self.ablation:
             ehr_serializer.static_events = [e for e in ehr_serializer.static_events if e.code.split('/')[0] not in ['CPT4', 'ICD10PCS', 'ICD9Proc']]
-        general_events_serialization = STATIC_EVENTS_HEADING + self.serialize_unique_event_list(ehr_serializer.static_events, numeric_values=True, keep_last=3) + '\n\n'
+        if 'no_conditions' in self.ablation and 'no_medications' in self.ablation and 'no_procedures' in self.ablation:
+            general_events_serialization = ""
+        else:
+            general_events_serialization = STATIC_EVENTS_HEADING + self.serialize_unique_event_list(ehr_serializer.static_events, numeric_values=True, keep_last=3) + '\n\n'
         
         # Detailed Medical History
         medical_history = ""

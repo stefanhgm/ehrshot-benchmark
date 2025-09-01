@@ -1,6 +1,7 @@
 import argparse
 import pickle
 import os
+import time
 from loguru import logger
 from utils import check_file_existence_and_handle_force_refresh
 from typing import Dict, List, Tuple
@@ -44,15 +45,25 @@ if __name__ == "__main__":
         ['LOINC', 'Domain', 'CARE_SITE', 'ICDO3', 'RxNorm', 'RxNorm Extension', 'Medicare Specialty', 'CMS Place of Service', 'OMOP Extension', 'Condition Type']  if args.excluded_ontologies == 'no_labs_meds_single' else []
     NUM_AGGREGATED_EVENTS: int = args.num_aggregated  # Default: 0
     FILTER_AGGREGATED_EVENTS: bool = NUM_AGGREGATED_EVENTS > 0
-    # Convert into None or timedelta in days
-    TIME_WINDOW: timedelta | None = None if args.time_window_days == 0 else timedelta(days=args.time_window_days)
+    # Convert into None or timedelta in days, hack: use negative numbers as hours
+    TIME_WINDOW: timedelta | None = None if args.time_window_days == 0 else (timedelta(days=args.time_window_days) if args.time_window_days > 0 else timedelta(hours=-args.time_window_days))
 
     # Process serialization ablations for unique_then_list_visits_wo_allconds_w_values_4k
     ablation_prefix = 'unique_then_list_visits_wo_allconds_w_values_4k_no_'
+    ablation_only_prefix = 'unique_then_list_visits_wo_allconds_w_values_4k_only_'
     if args.serialization_strategy.startswith(ablation_prefix):
         ablation_suffix = args.serialization_strategy[len(ablation_prefix):]
         # Process appended ablations
         ablation = [f"no_{component}" for component in ablation_suffix.split('_no_')]
+        args.serialization_strategy = 'unique_then_list_visits_wo_allconds_w_values_4k'
+    elif args.serialization_strategy.startswith(ablation_only_prefix):
+        ablation_suffix = args.serialization_strategy[len(ablation_only_prefix):]
+        # Process appended ablations
+        all_parts = ['no_demographics', 'no_aggregated_events',
+                     'no_aggregated_body_metrics', 'no_aggregated_vital_signs', 'no_aggregated_lab_results',
+                     'no_visits', 'no_conditions', 'no_medications', 'no_procedures']
+        only_parts = [component for component in ablation_suffix.split('_only_')]
+        ablation = [part for part in all_parts if part[3:] not in only_parts]
         args.serialization_strategy = 'unique_then_list_visits_wo_allconds_w_values_4k'
     else:
         ablation = []

@@ -16,19 +16,19 @@ mkdir -p $EXPERIMENTS_DIR
 
 # Define the different options to iterate over
 text_encoders=(
-    "llm2vec_llama3_1_7b_instruct_supervised"
+    "qwen3_embedding_8b"
+    # "qwen3_embedding_4b"
+    # "qwen3_embedding_0_6b"
+    # "gteqwen2_7b_instruct"
+    # "gteqwen2_7b_instruct_chunked_2k"
+    # "gteqwen2_7b_instruct_chunked_1k"
+    # "gteqwen2_7b_instruct_chunked_512"
+    # "gteqwen2_1_5b_instruct"    
+    # "llm2vec_llama3_1_7b_instruct_supervised"
     # "llm2vec_llama3_1_7b_instruct_supervised_chunked_2k"
     # "llm2vec_llama3_1_7b_instruct_supervised_chunked_1k"
     # "llm2vec_llama3_1_7b_instruct_supervised_chunked_512"
     # "llm2vec_llama2_sheared_1_3b_supervised"
-    "gteqwen2_7b_instruct"
-    # "gteqwen2_7b_instruct_chunked_2k"
-    # "gteqwen2_7b_instruct_chunked_1k"
-    # "gteqwen2_7b_instruct_chunked_512"
-    # "gteqwen2_1_5b_instruct"
-    "qwen3_embedding_0_6b"
-    # "qwen3_embedding_8b"
-    # "qwen3_embedding_4b"
     # "bioclinicalbert"
     # "deberta_v3_base"
     # "deberta_v3_large"
@@ -46,20 +46,38 @@ text_encoders=(
 #     "unique_then_list_visits_wo_allconds_w_values_2k"
 #     "unique_then_list_visits_wo_allconds_w_values_1k"
 #     "unique_then_list_visits_wo_allconds_w_values_512"
+
+#     Ablations removing EHR serialization parts
+#     "unique_then_list_visits_wo_allconds_w_values_4k_neutral"
 #     "unique_then_list_visits_wo_allconds_w_values_4k_no_demographics"
 #     "unique_then_list_visits_wo_allconds_w_values_4k_no_aggregated_events"
+#     "unique_then_list_visits_wo_allconds_w_values_4k_no_aggregated_lab_results"
+#     "unique_then_list_visits_wo_allconds_w_values_4k_no_aggregated_body_metrics"
+#     "unique_then_list_visits_wo_allconds_w_values_4k_no_aggregated_vital_signs"
 #     "unique_then_list_visits_wo_allconds_w_values_4k_no_visits"
 #     "unique_then_list_visits_wo_allconds_w_values_4k_no_conditions"
 #     "unique_then_list_visits_wo_allconds_w_values_4k_no_medications"
 #     "unique_then_list_visits_wo_allconds_w_values_4k_no_procedures"
-#     "unique_then_list_visits_wo_allconds_w_values_4k_neutral"
+
+#     Ablations adding EHR serialization parts
+#     "unique_then_list_visits_wo_allconds_w_values_4k_only_demographics"
+#     "unique_then_list_visits_wo_allconds_w_values_4k_only_aggregated_events_only_aggregated_body_metrics_only_aggregated_vital_signs_only_aggregated_lab_results"
+#     "unique_then_list_visits_wo_allconds_w_values_4k_only_aggregated_events_only_aggregated_body_metrics"
+#     "unique_then_list_visits_wo_allconds_w_values_4k_only_aggregated_events_only_aggregated_vital_signs"
+#     "unique_then_list_visits_wo_allconds_w_values_4k_only_aggregated_events_only_aggregated_lab_results"
+#     "unique_then_list_visits_wo_allconds_w_values_4k_only_visits"
+#     "unique_then_list_visits_wo_allconds_w_values_4k_only_visits_only_conditions_only_medications_only_procedures"
+#     "unique_then_list_visits_wo_allconds_w_values_4k_only_visits_only_conditions"
+#     "unique_then_list_visits_wo_allconds_w_values_4k_only_visits_only_medications"
+#     "unique_then_list_visits_wo_allconds_w_values_4k_only_visits_only_procedures"
+
 #     "unique_then_list_visits_wo_allconds"
 #     "unique_then_list_visits_wo_allconds_4k"
 #     "unique_then_list_visits_w_values"
 #     "unique_then_list_visits_w_values_4k"
 #     "unique_then_list_visits"
 #     "unique_then_list_visits_4k"
-# )
+#)
 
 # Selected serialization and settings
 serialization_strategies=("unique_then_list_visits_wo_allconds_w_values_4k")
