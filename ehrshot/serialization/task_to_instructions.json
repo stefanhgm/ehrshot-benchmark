@@ -15,5 +15,19 @@
     "new_celiac": "has the patient celiac disease",
     "new_lupus": "has the patient lupus",
     "new_acutemi": "has the patient an acute myocardial infarction",
-    "chexpert": "what are the chest x-ray findings of the patient"
+    "chexpert": "what are the chest x-ray findings of the patient",
+    "chexpert_No Finding": "will the chest x-ray of this patient show no finding",
+    "chexpert_Enlarged Cardiomediastinum": "will the chest x-ray of this patient show an enlarged cardiomediastinum",
+    "chexpert_Cardiomegaly": "will the chest x-ray of this patient show cardiomegaly",
+    "chexpert_Lung Lesion": "will the chest x-ray of this patient show a lung lesion",
+    "chexpert_Lung Opacity": "will the chest x-ray of this patient show a lung opacity",
+    "chexpert_Edema": "will the chest x-ray of this patient show edema",
+    "chexpert_Consolidation": "will the chest x-ray of this patient show consolidation",
+    "chexpert_Pneumonia": "will the chest x-ray of this patient show pneumonia",
+    "chexpert_Atelectasis": "will the chest x-ray of this patient show atelectasis",
+    "chexpert_Pneumothorax": "will the chest x-ray of this patient show a pneumothorax",
+    "chexpert_Pleural Effusion": "will the chest x-ray of this patient show pleural effusion",
+    "chexpert_Pleural Other": "will the chest x-ray of this patient show other pleural findings",
+    "chexpert_Fracture": "will the chest x-ray of this patient show a fracture",
+    "chexpert_Support Devices": "will the chest x-ray of this patient show support devices"
 }

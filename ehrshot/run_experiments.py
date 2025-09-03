@@ -127,8 +127,9 @@ def main(args):
         
     # Clean up the experiment folder
     llm_features_file = os.path.join(args.experiment_folder, 'llm_features.pkl')
-    if os.path.exists(llm_features_file):
-        os.remove(llm_features_file)
+    # DEBUG
+    # if os.path.exists(llm_features_file):
+    #     os.remove(llm_features_file)
        
     # Step 4: Log results to wandb
     results_path = os.path.join(args.experiment_folder, 'all_results.csv')

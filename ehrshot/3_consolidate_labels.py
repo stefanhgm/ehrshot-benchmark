@@ -5,7 +5,7 @@ from typing import Dict, List, Set, Tuple
 from loguru import logger
 import collections
 import csv
-from utils import check_file_existence_and_handle_force_refresh
+from utils import CHEXPERT_LABELS
 
 from femr.labelers import load_labeled_patients, LabeledPatients, Label
 
@@ -33,8 +33,12 @@ if __name__ == "__main__":
     # labeling_functions = [x for x in labeling_functions if x.startswith('new_') or x.startswith('guo_') or x.startswith('chexpert')]
     # NOTE: Include all tasks
     labeling_functions = [x for x in labeling_functions if x.startswith('new_') or x.startswith('guo_') or x.startswith('lab_') or x.startswith('chexpert')]
+    # If set, split chexpert labels by subtask
+    if args.split_chexpert:
+        labeling_functions = [lf for lf in labeling_functions if lf != 'chexpert'] + ['chexpert_' + x for x in CHEXPERT_LABELS]
+
     logger.info(f"Found {len(labeling_functions)} labeling functions to merge: {labeling_functions}")
-    
+
     # Merge all predictions times for all labels across all tasks into a single file,
     # and track the task (labeling function) used for each label.
     logger.info("Start | Consolidate patients")
@@ -45,13 +49,16 @@ if __name__ == "__main__":
 
     num_duplicates = 0
     for lf in labeling_functions:
+        orig_lf = lf
+        if args.split_chexpert and lf.startswith('chexpert_'):
+            lf = 'chexpert'
         labeled_patients: LabeledPatients = load_labeled_patients(os.path.join(PATH_TO_LABELS_DIR, lf, 'labeled_patients.csv'))
         for patient_id, labels in labeled_patients.items():
             for label in labels:
                 patient_2_label_times[patient_id].add(label.time)
-                if (label.time, lf) in patient_2_label_times_tasks[patient_id]:
+                if (label.time, orig_lf) in patient_2_label_times_tasks[patient_id]:
                     num_duplicates += 1
-                patient_2_label_times_tasks[patient_id].add((label.time, lf))
+                patient_2_label_times_tasks[patient_id].add((label.time, orig_lf))
     logger.info(f"Found {num_duplicates} duplicate labels with same timestamp and task")
     logger.info("Finish | Consolidate patients")
 

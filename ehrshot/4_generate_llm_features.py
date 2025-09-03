@@ -13,7 +13,7 @@ from serialization.ehr_serializer import UniqueThenListVisitsStrategy, UniqueThe
 from datetime import datetime, timedelta
 from llm_featurizer import LLMFeaturizer, preprocess_llm_featurizer, featurize_llm_featurizer, load_labeled_patients_with_tasks
 import json
-from utils import LABELING_FUNCTION_2_PAPER_NAME
+from utils import LABELING_FUNCTION_2_PAPER_NAME, CHEXPERT_LABELS
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generate text-based featurizations for LLM models (for all tasks at once)")
@@ -149,9 +149,11 @@ if __name__ == "__main__":
         with open(PATH_TO_TASK_TO_INSTRUCTIONS_FILE, 'r') as f:
             task_to_instructions = json.load(f)
             assert all([isinstance(v, str) for v in task_to_instructions.values()]), "All values of task_to_instructions must be strings"
-            if set(LABELING_FUNCTION_2_PAPER_NAME.keys()) - set(task_to_instructions.keys()):
-                # Print differences
-                logger.error(f"Task to instructions file does not contain all tasks. Missing: {set(LABELING_FUNCTION_2_PAPER_NAME.keys()) - set(task_to_instructions.keys())}")
+            # Print potential missing instructions
+            all_sub_tasks = set(LABELING_FUNCTION_2_PAPER_NAME.keys()).union(set(['chexpert_' + lf for lf in CHEXPERT_LABELS]))
+            missing_instructions = all_sub_tasks - set(task_to_instructions.keys())
+            if missing_instructions:
+                logger.error(f"Task to instructions file does not contain all tasks. Missing: {missing_instructions}")
     else:
         task_to_instructions = {}
     use_instructions = task_to_instructions is not None

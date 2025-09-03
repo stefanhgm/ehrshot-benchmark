@@ -6,6 +6,7 @@
 import argparse
 import json
 import os
+from re import X
 from typing import Any, Dict, List, Optional, Tuple, Union
 import numpy as np
 import collections
@@ -177,6 +178,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--shot_strat", type=str, choices=SHOT_STRATS.keys(), help="What type of X-shot evaluation we are interested in.", required=True )
     parser.add_argument("--labeling_function", required=True, type=str, help="Labeling function for which we will create k-shot samples.", choices=LABELING_FUNCTION_2_PAPER_NAME.keys(), )
     parser.add_argument("--num_threads", type=int, help="Number of threads to use")
+    parser.add_argument("--split_chexpert", action='store_true', default=False, help="If set, then split chexpert labels")
     # TODO: Force refresh for debugging
     parser.add_argument("--is_force_refresh", action='store_true', default=True, help="If set, then overwrite all outputs")
     return parser.parse_args()
@@ -206,10 +208,25 @@ if __name__ == "__main__":
     # Load FEMR Patient Database
     database = femr.datasets.PatientDatabase(PATH_TO_DATABASE)
 
+    if args.split_chexpert:
+        logger.info("Splitting CheXpert labels and using separate embeddings.")
+    # Special dictionsaries to keep track of subtask variables for chexpert
+    chexpert_sub_splits = {}
+    chexpert_train_val_test_pids = {}
+    chexpert_label_values = {}
+    
     # Load labels for this task
     labeled_patients: LabeledPatients = load_labeled_patients(PATH_TO_LABELED_PATIENTS)
-    patient_ids, label_values, label_times, feature_matrixes = get_labels_and_features(labeled_patients, PATH_TO_FEATURES_DIR, labeling_function=LABELING_FUNCTION)
-    train_pids_idx, val_pids_idx, test_pids_idx = get_patient_splits_by_idx(PATH_TO_SPLIT_CSV, patient_ids)
+    patient_ids = []
+    label_values = []
+    feature_matrixes = {}
+    if args.split_chexpert and LABELING_FUNCTION == 'chexpert':
+        for sub_task in CHEXPERT_LABELS:
+            chexpert_sub_splits[sub_task] = get_labels_and_features(labeled_patients, PATH_TO_FEATURES_DIR, labeling_function='chexpert_' + sub_task)
+            chexpert_train_val_test_pids[sub_task] = get_patient_splits_by_idx(PATH_TO_SPLIT_CSV, chexpert_sub_splits[sub_task][0])
+    else:
+        patient_ids, label_values, label_times, feature_matrixes = get_labels_and_features(labeled_patients, PATH_TO_FEATURES_DIR, labeling_function=LABELING_FUNCTION)
+        train_pids_idx, val_pids_idx, test_pids_idx = get_patient_splits_by_idx(PATH_TO_SPLIT_CSV, patient_ids)
     
     # Load shot assignments for this task
     with open(PATH_TO_SHOTS) as f:
@@ -217,7 +234,11 @@ if __name__ == "__main__":
 
     # Preprocess certain non-binary labels
     if LABELING_FUNCTION == "chexpert":
-        label_values = process_chexpert_labels(label_values)
+        if args.split_chexpert:
+            for sub_task in CHEXPERT_LABELS:
+                chexpert_label_values[sub_task] = process_chexpert_labels(chexpert_sub_splits[sub_task][1])
+        else:
+            label_values = process_chexpert_labels(label_values)
         sub_tasks: List[str] = CHEXPERT_LABELS
     elif LABELING_FUNCTION.startswith('lab_'):
        # Lab value is multi-class, convert to binary
@@ -240,19 +261,45 @@ if __name__ == "__main__":
             # Check if in experimental LLM setting, then only consider LLM models
             if '/experiments/' in PATH_TO_FEATURES_DIR and model != 'llm':
                 continue
-            # Unpack each individual featurization we want to test
-            assert model in feature_matrixes, f"Feature matrix not found for `{model}`. Are you sure you have generated features for this model? If not, you'll need to rerun `generate_features.py` or `generate_clmbr_representations.py`."
-            X_train: np.ndarray = feature_matrixes[model][train_pids_idx]
-            X_val: np.ndarray = feature_matrixes[model][val_pids_idx]
-            X_test: np.ndarray = feature_matrixes[model][test_pids_idx]
-            y_test: np.ndarray = label_values[test_pids_idx]
+
+            if model != 'llm':
+                continue
             
-            test_patient_ids = patient_ids[test_pids_idx]
+            X_train: np.ndarray = np.ndarray([])
+            X_val: np.ndarray = np.ndarray([])
+            X_test: np.ndarray = np.ndarray([])
+            y_test: np.ndarray = np.ndarray([])
+            test_patient_ids: np.ndarray = np.ndarray([])
+            
+            if not (args.split_chexpert and LABELING_FUNCTION == 'chexpert'):
+                # Unpack each individual featurization we want to test
+                assert model in feature_matrixes, f"Feature matrix not found for `{model}`. Are you sure you have generated features for this model? If not, you'll need to rerun `generate_features.py` or `generate_clmbr_representations.py`."
+                
+                X_train: np.ndarray = feature_matrixes[model][train_pids_idx]
+                X_val: np.ndarray = feature_matrixes[model][val_pids_idx]
+                X_test: np.ndarray = feature_matrixes[model][test_pids_idx]
+                y_test: np.ndarray = label_values[test_pids_idx]
+                test_patient_ids = patient_ids[test_pids_idx]
             
             # For each subtask in this task... 
             # NOTE: The "subtask" is just the same thing as LABELING_FUNCTION for all binary tasks.
             # But for Chexpert, there are multiple subtasks, which of each represents a binary subtask
             for sub_task_idx, sub_task in enumerate(sub_tasks):
+                # If splitting chexpert, then need to reassign X/Y splits for this subtask
+                if args.split_chexpert and LABELING_FUNCTION == 'chexpert':
+                    patient_ids, label_values, label_times, feature_matrixes = chexpert_sub_splits[sub_task]
+                    label_values = chexpert_label_values[sub_task]
+                    train_pids_idx, val_pids_idx, test_pids_idx = chexpert_train_val_test_pids[sub_task]
+                    
+                    # Unpack each individual featurization we want to test
+                    assert model in feature_matrixes, f"Feature matrix not found for `{model}`. Are you sure you have generated features for this model? If not, you'll need to rerun `generate_features.py` or `generate_clmbr_representations.py`."
+                    
+                    X_train: np.ndarray = feature_matrixes[model][train_pids_idx]
+                    X_val: np.ndarray = feature_matrixes[model][val_pids_idx]
+                    X_test: np.ndarray = feature_matrixes[model][test_pids_idx]
+                    y_test: np.ndarray = label_values[test_pids_idx]
+                    test_patient_ids = patient_ids[test_pids_idx]
+
                 # Check if results already exist for this model/head/shot_strat in `results.csv`
                 if df_existing is not None:
                     existing_rows: pd.DataFrame = df_existing[
@@ -277,6 +324,12 @@ if __name__ == "__main__":
                 
                 # For each k-shot sample we are evaluating...
                 for k in ks:
+                    ##########
+                    ##########
+                    ## DEBUG
+                    if k != -1:
+                        continue
+                    
                     replicates: List[int] = sorted([ int(x) for x in few_shots_dict[sub_task][str(k)].keys() ])
 
                     # For each replicate of this k-shot sample...
