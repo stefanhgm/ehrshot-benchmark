@@ -14,7 +14,7 @@ from typing import Tuple
 import hashlib
 import os
 import pickle
-# from llm2vec import LLM2Vec
+from llm2vec import LLM2Vec
 import torch
 # Workaround for ModernBert
 # 1. Use different environment with github transformers version
@@ -187,80 +187,80 @@ class Qwen2LLMEncoder(LLMEncoder):
 
 
 # From https://huggingface.co/Qwen/Qwen3-Embedding-8B
-class Qwen3LLMEncoder(LLMEncoder):
-    def __init__(self, embedding_size: int, model_max_input_length: int, max_input_length: int) -> None:
-        super().__init__(embedding_size, model_max_input_length, max_input_length)
-        
-    def add_instruction(self, instruction: str, text: str) -> Any:
-        if instruction is not None and len(instruction) > 0:
-            return f'Instruct: {instruction}\nQuery:\n{text}'
-        return text
-    
-    @staticmethod
-    def last_token_pool(last_hidden_states: Tensor, attention_mask: Tensor) -> Tensor:
-        left_padding = (attention_mask[:, -1].sum() == attention_mask.shape[0])
-        if left_padding:
-            return last_hidden_states[:, -1]
-        else:
-            sequence_lengths = attention_mask.sum(dim=1) - 1
-            batch_size = last_hidden_states.shape[0]
-            return last_hidden_states[torch.arange(batch_size, device=last_hidden_states.device), sequence_lengths]
-
-    def _encode(self, inputs: List, **kwargs) -> NDArray[Any]:
-        with torch.no_grad():
-            gpu_factor = 1 if torch.cuda.device_count() <= 1 else int(torch.cuda.device_count() / 2)  # Divide by 2 to ensure not too large batch per GPU
-            dataloader = DataLoader(TextsDataset(inputs), batch_size=self.batch_size * gpu_factor, shuffle=False)
-            all_embeddings = []
-            for batch in tqdm(dataloader, desc="Processing Batches"):
-                batch_dict = self.tokenizer(batch, max_length=self.max_input_length, padding=True, truncation=True, return_tensors='pt').to(self.device) # type: ignore
-                outputs = self.model(**batch_dict) # type: ignore
-                embeddings = self.last_token_pool(outputs.last_hidden_state, batch_dict['attention_mask']) # type: ignore
-                normalized_embeddings = F.normalize(embeddings, p=2, dim=1).cpu().detach().numpy()
-                all_embeddings.append(normalized_embeddings)
-            return np.concatenate(all_embeddings, axis=0)
+# class Qwen3LLMEncoder(LLMEncoder):
+#     def __init__(self, embedding_size: int, model_max_input_length: int, max_input_length: int) -> None:
+#         super().__init__(embedding_size, model_max_input_length, max_input_length)
+#         
+#     def add_instruction(self, instruction: str, text: str) -> Any:
+#         if instruction is not None and len(instruction) > 0:
+#             return f'Instruct: {instruction}\nQuery:\n{text}'
+#         return text
+#     
+#     @staticmethod
+#     def last_token_pool(last_hidden_states: Tensor, attention_mask: Tensor) -> Tensor:
+#         left_padding = (attention_mask[:, -1].sum() == attention_mask.shape[0])
+#         if left_padding:
+#             return last_hidden_states[:, -1]
+#         else:
+#             sequence_lengths = attention_mask.sum(dim=1) - 1
+#             batch_size = last_hidden_states.shape[0]
+#             return last_hidden_states[torch.arange(batch_size, device=last_hidden_states.device), sequence_lengths]
+# 
+#     def _encode(self, inputs: List, **kwargs) -> NDArray[Any]:
+#         with torch.no_grad():
+#             gpu_factor = 1 if torch.cuda.device_count() <= 1 else int(torch.cuda.device_count() / 2)  # Divide by 2 to ensure not too large batch per GPU
+#             dataloader = DataLoader(TextsDataset(inputs), batch_size=self.batch_size * gpu_factor, shuffle=False)
+#             all_embeddings = []
+#             for batch in tqdm(dataloader, desc="Processing Batches"):
+#                 batch_dict = self.tokenizer(batch, max_length=self.max_input_length, padding=True, truncation=True, return_tensors='pt').to(self.device) # type: ignore
+#                 outputs = self.model(**batch_dict) # type: ignore
+#                 embeddings = self.last_token_pool(outputs.last_hidden_state, batch_dict['attention_mask']) # type: ignore
+#                 normalized_embeddings = F.normalize(embeddings, p=2, dim=1).cpu().detach().numpy()
+#                 all_embeddings.append(normalized_embeddings)
+#             return np.concatenate(all_embeddings, axis=0)
 
 # NOTE: workaround for LLM2Vec models that are not compatible with most recent transformers library for ModernBERT, Qwen3 
-class LLM2VecLlama3_1_7B_InstructSupervisedEncoder(LLM2VecLLMEncoder):
-    def __init__(self, max_input_length: int, **kwargs) -> None:
-        pass
-        
-class LLM2VecLlama2_Sheared_1_3B_SupervisedEncoder(LLM2VecLLMEncoder):
-    def __init__(self, max_input_length: int, **kwargs) -> None:
-        pass
-
 # class LLM2VecLlama3_1_7B_InstructSupervisedEncoder(LLM2VecLLMEncoder):
-#     
 #     def __init__(self, max_input_length: int, **kwargs) -> None:
-#         super().__init__(embedding_size=4096, model_max_input_length=128000, max_input_length=max_input_length)
-#         # peft_model_name_or_path = "/mntp-supervised/Meta-Llama-3.1-8B-Instruct_1000_mntp_steps/E5_train_m-Meta-Llama-3.1-8B-Instruct_p-mean_b-64_l-512_bidirectional-True_e-3_s-42_w-300_lr-0.0002_lora_r-16/checkpoint-1000"
-#         peft_model_name_or_path = "McGill-NLP/LLM2Vec-Meta-Llama-31-8B-Instruct-mntp-supervised"
-#         if 'custom_path' in kwargs:
-#             # TODO: Added reproducibility path
-#             model_path = "/home/sthe14/llm2vec-repro/output"
-#             peft_model_name_or_path = model_path + kwargs['custom_path']
-#         # Changed this to updated loading instructions from https://huggingface.co/McGill-NLP/LLM2Vec-Meta-Llama-31-8B-Instruct-mntp-supervised
-#         self.model = LLM2Vec.from_pretrained(
-#             "McGill-NLP/LLM2Vec-Meta-Llama-31-8B-Instruct-mntp",
-#             trust_remote_code=True,
-#             peft_model_name_or_path=peft_model_name_or_path,
-#             device_map="cuda" if torch.cuda.is_available() else "cpu",
-#             torch_dtype=torch.bfloat16,
-#             max_length=self.max_input_length,
-#             doc_max_length=self.max_input_length,
-#         )
-# 
+#         pass
+        
 # class LLM2VecLlama2_Sheared_1_3B_SupervisedEncoder(LLM2VecLLMEncoder):
-# 
 #     def __init__(self, max_input_length: int, **kwargs) -> None:
-#         super().__init__(embedding_size=2048, model_max_input_length=4096, max_input_length=max_input_length)
-#         self.model = LLM2Vec.from_pretrained(
-#             "McGill-NLP/LLM2Vec-Sheared-LLaMA-mntp",
-#             peft_model_name_or_path="McGill-NLP/LLM2Vec-Sheared-LLaMA-mntp-supervised",
-#             device_map="cuda" if torch.cuda.is_available() else "cpu",
-#             torch_dtype=torch.bfloat16,
-#             max_length=self.max_input_length,
-#             doc_max_length=self.max_input_length,
-#         )
+#         pass
+
+class LLM2VecLlama3_1_7B_InstructSupervisedEncoder(LLM2VecLLMEncoder):
+    
+    def __init__(self, max_input_length: int, **kwargs) -> None:
+        super().__init__(embedding_size=4096, model_max_input_length=128000, max_input_length=max_input_length)
+        # peft_model_name_or_path = "/mntp-supervised/Meta-Llama-3.1-8B-Instruct_1000_mntp_steps/E5_train_m-Meta-Llama-3.1-8B-Instruct_p-mean_b-64_l-512_bidirectional-True_e-3_s-42_w-300_lr-0.0002_lora_r-16/checkpoint-1000"
+        peft_model_name_or_path = "McGill-NLP/LLM2Vec-Meta-Llama-31-8B-Instruct-mntp-supervised"
+        if 'custom_path' in kwargs:
+            # TODO: Added reproducibility path
+            model_path = "/home/sthe14/llm2vec-repro/output"
+            peft_model_name_or_path = model_path + kwargs['custom_path']
+        # Changed this to updated loading instructions from https://huggingface.co/McGill-NLP/LLM2Vec-Meta-Llama-31-8B-Instruct-mntp-supervised
+        self.model = LLM2Vec.from_pretrained(
+            "McGill-NLP/LLM2Vec-Meta-Llama-31-8B-Instruct-mntp",
+            trust_remote_code=True,
+            peft_model_name_or_path=peft_model_name_or_path,
+            device_map="cuda" if torch.cuda.is_available() else "cpu",
+            torch_dtype=torch.bfloat16,
+            max_length=self.max_input_length,
+            doc_max_length=self.max_input_length,
+        )
+
+class LLM2VecLlama2_Sheared_1_3B_SupervisedEncoder(LLM2VecLLMEncoder):
+
+    def __init__(self, max_input_length: int, **kwargs) -> None:
+        super().__init__(embedding_size=2048, model_max_input_length=4096, max_input_length=max_input_length)
+        self.model = LLM2Vec.from_pretrained(
+            "McGill-NLP/LLM2Vec-Sheared-LLaMA-mntp",
+            peft_model_name_or_path="McGill-NLP/LLM2Vec-Sheared-LLaMA-mntp-supervised",
+            device_map="cuda" if torch.cuda.is_available() else "cpu",
+            torch_dtype=torch.bfloat16,
+            max_length=self.max_input_length,
+            doc_max_length=self.max_input_length,
+        )
 
 class GTEQwen2_7B_InstructEncoder(Qwen2LLMEncoder):
     
@@ -275,43 +275,43 @@ class GTEQwen2_7B_InstructEncoder(Qwen2LLMEncoder):
             print(f"Using {torch.cuda.device_count()} GPUs.")
             self.model = torch.nn.DataParallel(self.model)
 
-# class LLM2VecLlama3_1_7B_InstructSupervisedChunkedEncoder(LLM2VecLlama3_1_7B_InstructSupervisedEncoder):
-#     
-#     def __init__(self, max_input_length: int, **kwargs) -> None:
-#         super().__init__(max_input_length=max_input_length, **kwargs)
-#         
-#     def _encode(self, inputs: List, **kwargs) -> NDArray[Any]:
-#         # Use multiples of this base input length to determine the max number of chunks, e.g. for 2k chunks use max number of 2
-#         BASE_INPUT_LENGTH = 4096
-#         max_chunks = BASE_INPUT_LENGTH // self.max_input_length
-#         # To save memory, shorten texts to BASE_INPUT_LENGTH * 8 characters as a very loose upper bound for the number of tokens
-#         inputs = [text[:BASE_INPUT_LENGTH * 8] for text in inputs]
-#         
-#         # Create chunks of the inputs before calling the superclass encode method
-#         num_inputs = len(inputs)
-#         print(f"Creating chunks for {num_inputs} inputs of size {self.max_input_length} (max_chunks: {max_chunks}).")
-#         # NOTE: Must use self.model.tokenizer instead of self.tokenizer
-#         # In contrast to qwen2, the instruction is handled separately for llama, to get same behavior add it to the text
-#         instructions = [input[0] for input in inputs]
-#         inputs = [input[0] + input[1] for input in inputs]
-#         inputs, chunk_counts = self.get_chunked_dataset(inputs, self.model.tokenizer, max_chunks=max_chunks)
-#         # Remove instructions from first chunk at add them as llama instruction again
-#         inputs = [['', input] for input in inputs]
-#         first_chunk_idx = 0
-#         for i, count in enumerate(chunk_counts):
-#             assert instructions[i] == inputs[first_chunk_idx][1][:len(instructions[i])]
-#             inputs[first_chunk_idx][0] = instructions[i]
-#             inputs[first_chunk_idx][1] = inputs[first_chunk_idx][1][len(instructions[i]):]
-#             first_chunk_idx += count
-#         
-#         print(f"Encoding {len(inputs)} chunks.")
-#         all_embeddings = super()._encode(inputs)
-#         
-#         # Average chunk embeddings for each original text
-#         all_embeddings = self.get_averaged_chunks(all_embeddings, chunk_counts)
-#         assert len(all_embeddings) == num_inputs
-#             
-#         return all_embeddings
+class LLM2VecLlama3_1_7B_InstructSupervisedChunkedEncoder(LLM2VecLlama3_1_7B_InstructSupervisedEncoder):
+    
+    def __init__(self, max_input_length: int, **kwargs) -> None:
+        super().__init__(max_input_length=max_input_length, **kwargs)
+        
+    def _encode(self, inputs: List, **kwargs) -> NDArray[Any]:
+        # Use multiples of this base input length to determine the max number of chunks, e.g. for 2k chunks use max number of 2
+        BASE_INPUT_LENGTH = 4096
+        max_chunks = BASE_INPUT_LENGTH // self.max_input_length
+        # To save memory, shorten texts to BASE_INPUT_LENGTH * 8 characters as a very loose upper bound for the number of tokens
+        inputs = [text[:BASE_INPUT_LENGTH * 8] for text in inputs]
+        
+        # Create chunks of the inputs before calling the superclass encode method
+        num_inputs = len(inputs)
+        print(f"Creating chunks for {num_inputs} inputs of size {self.max_input_length} (max_chunks: {max_chunks}).")
+        # NOTE: Must use self.model.tokenizer instead of self.tokenizer
+        # In contrast to qwen2, the instruction is handled separately for llama, to get same behavior add it to the text
+        instructions = [input[0] for input in inputs]
+        inputs = [input[0] + input[1] for input in inputs]
+        inputs, chunk_counts = self.get_chunked_dataset(inputs, self.model.tokenizer, max_chunks=max_chunks)
+        # Remove instructions from first chunk at add them as llama instruction again
+        inputs = [['', input] for input in inputs]
+        first_chunk_idx = 0
+        for i, count in enumerate(chunk_counts):
+            assert instructions[i] == inputs[first_chunk_idx][1][:len(instructions[i])]
+            inputs[first_chunk_idx][0] = instructions[i]
+            inputs[first_chunk_idx][1] = inputs[first_chunk_idx][1][len(instructions[i]):]
+            first_chunk_idx += count
+        
+        print(f"Encoding {len(inputs)} chunks.")
+        all_embeddings = super()._encode(inputs)
+        
+        # Average chunk embeddings for each original text
+        all_embeddings = self.get_averaged_chunks(all_embeddings, chunk_counts)
+        assert len(all_embeddings) == num_inputs
+            
+        return all_embeddings
 
 
 class GTEQwen2_7B_InstructChunkedEncoder(GTEQwen2_7B_InstructEncoder):
@@ -353,44 +353,44 @@ class GTEQwen2_1_5B_InstructEncoder(Qwen2LLMEncoder):
             print(f"Using {torch.cuda.device_count()} GPUs.")
             self.model = torch.nn.DataParallel(self.model)
 
-class Qwen3Embedding_8B_Encoder(Qwen3LLMEncoder):
-    
-    def __init__(self, max_input_length: int, **kwargs) -> None:
-        super().__init__(embedding_size=4096, model_max_input_length=32000, max_input_length=max_input_length) 
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.tokenizer = AutoTokenizer.from_pretrained('Qwen/Qwen3-Embedding-8B', padding_side='left', trust_remote_code=True)
-        self.model = AutoModel.from_pretrained('Qwen/Qwen3-Embedding-8B', attn_implementation="flash_attention_2", trust_remote_code=True, torch_dtype=torch.float16).to(self.device)  
-        
-        # Enable multi-gpu support
-        if torch.cuda.device_count() > 1:
-            print(f"Using {torch.cuda.device_count()} GPUs.")
-            self.model = torch.nn.DataParallel(self.model)
-
-class Qwen3Embedding_4B_Encoder(Qwen3LLMEncoder):
-       
-    def __init__(self, max_input_length: int, **kwargs) -> None:
-        super().__init__(embedding_size=2560, model_max_input_length=32000, max_input_length=max_input_length) 
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.tokenizer = AutoTokenizer.from_pretrained('Qwen/Qwen3-Embedding-4B', padding_side='left', trust_remote_code=True)
-        self.model = AutoModel.from_pretrained('Qwen/Qwen3-Embedding-4B', attn_implementation="flash_attention_2", trust_remote_code=True, torch_dtype=torch.float16).to(self.device)  
-        
-        # Enable multi-gpu support
-        if torch.cuda.device_count() > 1:
-            print(f"Using {torch.cuda.device_count()} GPUs.")
-            self.model = torch.nn.DataParallel(self.model)
-
-class Qwen3Embedding_0_6B_Encoder(Qwen3LLMEncoder):
-    
-    def __init__(self, max_input_length: int, **kwargs) -> None:
-        super().__init__(embedding_size=1024, model_max_input_length=32000, max_input_length=max_input_length) 
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.tokenizer = AutoTokenizer.from_pretrained('Qwen/Qwen3-Embedding-0.6B', padding_side='left', trust_remote_code=True)
-        self.model = AutoModel.from_pretrained('Qwen/Qwen3-Embedding-0.6B', attn_implementation="flash_attention_2", trust_remote_code=True, torch_dtype=torch.float16).to(self.device)  
-        
-        # Enable multi-gpu support
-        if torch.cuda.device_count() > 1:
-            print(f"Using {torch.cuda.device_count()} GPUs.")
-            self.model = torch.nn.DataParallel(self.model)
+# class Qwen3Embedding_8B_Encoder(Qwen3LLMEncoder):
+#     
+#     def __init__(self, max_input_length: int, **kwargs) -> None:
+#         super().__init__(embedding_size=4096, model_max_input_length=32000, max_input_length=max_input_length) 
+#         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+#         self.tokenizer = AutoTokenizer.from_pretrained('Qwen/Qwen3-Embedding-8B', padding_side='left', trust_remote_code=True)
+#         self.model = AutoModel.from_pretrained('Qwen/Qwen3-Embedding-8B', attn_implementation="flash_attention_2", trust_remote_code=True, torch_dtype=torch.float16).to(self.device)  
+#         
+#         # Enable multi-gpu support
+#         if torch.cuda.device_count() > 1:
+#             print(f"Using {torch.cuda.device_count()} GPUs.")
+#             self.model = torch.nn.DataParallel(self.model)
+# 
+# class Qwen3Embedding_4B_Encoder(Qwen3LLMEncoder):
+#        
+#     def __init__(self, max_input_length: int, **kwargs) -> None:
+#         super().__init__(embedding_size=2560, model_max_input_length=32000, max_input_length=max_input_length) 
+#         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+#         self.tokenizer = AutoTokenizer.from_pretrained('Qwen/Qwen3-Embedding-4B', padding_side='left', trust_remote_code=True)
+#         self.model = AutoModel.from_pretrained('Qwen/Qwen3-Embedding-4B', attn_implementation="flash_attention_2", trust_remote_code=True, torch_dtype=torch.float16).to(self.device)  
+#         
+#         # Enable multi-gpu support
+#         if torch.cuda.device_count() > 1:
+#             print(f"Using {torch.cuda.device_count()} GPUs.")
+#             self.model = torch.nn.DataParallel(self.model)
+# 
+# class Qwen3Embedding_0_6B_Encoder(Qwen3LLMEncoder):
+#     
+#     def __init__(self, max_input_length: int, **kwargs) -> None:
+#         super().__init__(embedding_size=1024, model_max_input_length=32000, max_input_length=max_input_length) 
+#         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+#         self.tokenizer = AutoTokenizer.from_pretrained('Qwen/Qwen3-Embedding-0.6B', padding_side='left', trust_remote_code=True)
+#         self.model = AutoModel.from_pretrained('Qwen/Qwen3-Embedding-0.6B', attn_implementation="flash_attention_2", trust_remote_code=True, torch_dtype=torch.float16).to(self.device)  
+#         
+#         # Enable multi-gpu support
+#         if torch.cuda.device_count() > 1:
+#             print(f"Using {torch.cuda.device_count()} GPUs.")
+#             self.model = torch.nn.DataParallel(self.model)
         
 class STGTELargeENv15Encoder(LLMEncoder):
     

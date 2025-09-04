@@ -1,6 +1,6 @@
 # Options
 num_threads=40
-EHRSHOT_ENV="EHRSHOT_ENV_QWEN3" # Set to EHRSHOT_ENV_QWEN3 for Qwen3, EHRSHOT_ENV for Llama3 and GteQwen2
+EHRSHOT_ENV="EHRSHOT_ENV" # Set to EHRSHOT_ENV_QWEN3 for Qwen3, EHRSHOT_ENV for Llama3 and GteQwen2
 source activate $EHRSHOT_ENV
 
 # Paths
@@ -16,7 +16,7 @@ mkdir -p $EXPERIMENTS_DIR
 
 # Define the different options to iterate over
 text_encoders=(
-    "qwen3_embedding_8b"
+    # "qwen3_embedding_8b"
     # "qwen3_embedding_4b"
     # "qwen3_embedding_0_6b"
     # "gteqwen2_7b_instruct"
@@ -24,7 +24,7 @@ text_encoders=(
     # "gteqwen2_7b_instruct_chunked_1k"
     # "gteqwen2_7b_instruct_chunked_512"
     # "gteqwen2_1_5b_instruct"    
-    # "llm2vec_llama3_1_7b_instruct_supervised"
+    "llm2vec_llama3_1_7b_instruct_supervised"
     # "llm2vec_llama3_1_7b_instruct_supervised_chunked_2k"
     # "llm2vec_llama3_1_7b_instruct_supervised_chunked_1k"
     # "llm2vec_llama3_1_7b_instruct_supervised_chunked_512"
@@ -86,7 +86,7 @@ serialization_strategies=("unique_then_list_visits_wo_allconds_w_values_4k")
 instructions_options=("true")
 excluded_ontologies=("no_labs_single")
 num_aggregated=(3)
-time_window_days=(0)
+time_window_days=(-1)
 # time_window_days=(1 7 30 365 1095)
 
 # Labels = Dataset subset
