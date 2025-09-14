@@ -4,6 +4,11 @@ from abc import ABC, abstractmethod
 from femr import Event
 from collections import defaultdict
 import re
+import markdown_to_json
+from json2xml import json2xml
+from json2xml.utils import readfromstring
+import json
+import yaml
 
 # Define constant time for labeling
 CONSTANT_LABEL_TIME = datetime(2024, 1, 1)
@@ -714,6 +719,95 @@ class ListVisitsWithEventsDetailedAggrStrategy(SerializationStrategy):
             static_text = STATIC_EVENTS_HEADING + self.serialize_event_list(ehr_serializer.static_events, numeric_values=self.numeric_values, unique_events=False)
         visits_text = VISITS_EVENTS_HEADING + self.list_visits_with_events(ehr_serializer, label_time, numeric_values=self.numeric_values, unique_events=self.unique_events) 
         return EHR_HEADING + self.get_time_text() + static_text + '\n\n' + aggr_events_serialization + medication_entry_serialization + visits_text
+
+
+class UniqueThenListVisitsWOAllCondsWithValuesJSONStrategy(SerializationStrategy):
+    def __init__(self, num_aggregated_events: int, ablation: list[str] = []):
+        self.num_aggregated_events = num_aggregated_events
+        self.ablation = ablation
+
+    def serialize(self, ehr_serializer, label_time: datetime) -> str:
+        md_strategy = UniqueThenListVisitsWOAllCondsWithValuesStrategy(
+            num_aggregated_events=self.num_aggregated_events,
+            ablation=self.ablation
+        )
+        md_text = md_strategy.serialize(ehr_serializer, label_time)
+        jsonified = markdown_to_json.jsonify(md_text)
+        return jsonified
+
+
+class UniqueThenListVisitsWOAllCondsWithValuesXMLStrategy(SerializationStrategy):
+    def __init__(self, num_aggregated_events: int, ablation: list[str] = []):
+        self.num_aggregated_events = num_aggregated_events
+        self.ablation = ablation
+
+    def serialize(self, ehr_serializer, label_time: datetime) -> str:
+        md_strategy = UniqueThenListVisitsWOAllCondsWithValuesStrategy(
+            num_aggregated_events=self.num_aggregated_events,
+            ablation=self.ablation
+        )
+        md_text = md_strategy.serialize(ehr_serializer, label_time)
+        jsonified = markdown_to_json.jsonify(md_text)
+        data = readfromstring(jsonified)
+        xml = json2xml.Json2xml(data, wrapper="all", pretty=True).to_xml()
+        return xml
+
+
+class UniqueThenListVisitsWOAllCondsWithValuesYAMLStrategy(SerializationStrategy):
+    def __init__(self, num_aggregated_events: int, ablation: list[str] = []):
+        self.num_aggregated_events = num_aggregated_events
+        self.ablation = ablation
+
+    def serialize(self, ehr_serializer, label_time: datetime) -> str:
+        md_strategy = UniqueThenListVisitsWOAllCondsWithValuesStrategy(
+            num_aggregated_events=self.num_aggregated_events,
+            ablation=self.ablation
+        )
+        md_text = md_strategy.serialize(ehr_serializer, label_time)
+        jsonified = markdown_to_json.jsonify(md_text)
+        data = json.loads(jsonified)
+        yaml_str = yaml.dump(data, allow_unicode=True, sort_keys=False)
+        return yaml_str
+
+
+class UniqueEventsListStrategy(SerializationStrategy):
+    def __init__(self, num_aggregated_events: int, ablation: list[str] = []):
+        self.num_aggregated_events = num_aggregated_events
+        self.ablation = ablation
+
+    def serialize(self, ehr_serializer, label_time: datetime) -> str:
+        # Collect all events
+        all_events = list(ehr_serializer.static_events)
+        for visit in ehr_serializer.visits:
+            all_events.extend(visit.events)
+
+        # Sort earliest -> oldest
+        all_events.sort(key=lambda e: e.start)
+
+        uniq = self.get_unique_events(all_events)
+        x = '\n'.join([self.serialize_event(event, numeric_values=True)[2:] for event in uniq])
+        return x
+
+
+class UniqueEventsListWithTimeStrategy(SerializationStrategy):
+    def __init__(self, num_aggregated_events: int, ablation: list[str] = []):
+        self.num_aggregated_events = num_aggregated_events
+        self.ablation = ablation
+
+    def serialize(self, ehr_serializer, label_time: datetime) -> str:
+        # Collect all events
+        all_events = list(ehr_serializer.static_events)
+        for visit in ehr_serializer.visits:
+            all_events.extend(visit.events)
+
+        # Sort earliest -> oldest
+        all_events.sort(key=lambda e: e.start)
+
+        uniq = self.get_unique_events(all_events)
+        # Render as a simple list with dates
+        x = '\n'.join([f"{event.start}: {self.serialize_event(event, numeric_values=True)[2:]}" for event in uniq])
+        return x
+
 
 class EHRVisit:
     def __init__(

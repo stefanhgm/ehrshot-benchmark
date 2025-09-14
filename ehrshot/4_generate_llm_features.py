@@ -9,7 +9,7 @@ import numpy as np
 # NOTE: workaround for LLM2Vec models that are not compatible with most recent transformers library for ModernBERT, Qwen3
 # from serialization.text_encoder import LLM2VecLlama2_Sheared_1_3B_SupervisedEncoder, LLM2VecLlama3_1_7B_InstructSupervisedEncoder, LLM2VecLlama3_1_7B_InstructSupervisedChunkedEncoder
 from serialization.text_encoder import TextEncoder,  GTEQwen2_7B_InstructEncoder, GTEQwen2_1_5B_InstructEncoder, STGTELargeENv15Encoder, BertEncoder, GTEQwen2_7B_InstructChunkedEncoder, Qwen3Embedding_8B_Encoder, Qwen3Embedding_4B_Encoder, Qwen3Embedding_0_6B_Encoder
-from serialization.ehr_serializer import UniqueThenListVisitsStrategy, UniqueThenListVisitsWithValuesStrategy, UniqueThenListVisitsWOAllCondsStrategy, UniqueThenListVisitsWOAllCondsWithValuesStrategy
+from serialization.ehr_serializer import UniqueThenListVisitsStrategy, UniqueThenListVisitsWithValuesStrategy, UniqueThenListVisitsWOAllCondsStrategy, UniqueThenListVisitsWOAllCondsWithValuesStrategy, UniqueThenListVisitsWOAllCondsWithValuesJSONStrategy, UniqueThenListVisitsWOAllCondsWithValuesXMLStrategy, UniqueThenListVisitsWOAllCondsWithValuesYAMLStrategy, UniqueEventsListStrategy, UniqueEventsListWithTimeStrategy
 from datetime import datetime, timedelta
 from llm_featurizer import LLMFeaturizer, preprocess_llm_featurizer, featurize_llm_featurizer, load_labeled_patients_with_tasks
 import json
@@ -87,6 +87,11 @@ if __name__ == "__main__":
         'unique_then_list_visits_w_values_4k': (UniqueThenListVisitsWithValuesStrategy, 4096),
         'unique_then_list_visits': (UniqueThenListVisitsStrategy, 8192),
         'unique_then_list_visits_4k': (UniqueThenListVisitsStrategy, 4096),
+        'unique_then_list_visits_wo_allconds_w_values_8k_json': (UniqueThenListVisitsWOAllCondsWithValuesJSONStrategy, 8192),
+        'unique_then_list_visits_wo_allconds_w_values_8k_xml': (UniqueThenListVisitsWOAllCondsWithValuesXMLStrategy, 8192),
+        'unique_then_list_visits_wo_allconds_w_values_8k_yaml': (UniqueThenListVisitsWOAllCondsWithValuesYAMLStrategy, 8192),
+        'unique_events_list_8k': (UniqueEventsListStrategy, 8192), 
+        'unique_events_list_w_time_8k': (UniqueEventsListWithTimeStrategy, 8192), 
     }
 
     # Determine serialization strategy and max input length
@@ -157,6 +162,16 @@ if __name__ == "__main__":
     use_instructions = task_to_instructions is not None
     logger.info("Use no instructions." if not use_instructions else f"Use instructions from: {PATH_TO_TASK_TO_INSTRUCTIONS_FILE}")
 
+    custom_instruction_prefixes = {
+        'unique_then_list_visits_wo_allconds_w_values_8k_json': "Given a patient's electronic healthcare record (EHR) in JSON format, retrieve relevant passages that answer the query:",
+        'unique_then_list_visits_wo_allconds_w_values_8k_xml': "Given a patient's electronic healthcare record (EHR) in XML format, retrieve relevant passages that answer the query:",
+        'unique_then_list_visits_wo_allconds_w_values_8k_yaml': "Given a patient's electronic healthcare record (EHR) in YAML format, retrieve relevant passages that answer the query:",
+        'unique_events_list_8k': "Given a patient's electronic healthcare record (EHR) as a list of unique events, retrieve relevant passages that answer the query:",
+        'unique_events_list_w_time_8k': "Given a patient's electronic healthcare record (EHR) as a list of unique events with timestamps, retrieve relevant passages that answer the query:",
+    }
+    if args.serialization_strategy in custom_instruction_prefixes:
+        task_to_instructions['instruction_prefix'] = custom_instruction_prefixes[args.serialization_strategy]
+
     # Add date and time (hh-mm-ss) to name
     # output_file_name = f'llm_features_{args.text_encoder}_{args.serialization_strategy}{"_instr" if use_instructions else ""}_{datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}.pkl'
     output_file_name = 'llm_features.pkl'
@@ -168,7 +183,7 @@ if __name__ == "__main__":
     logger.info(f"Loading LabeledPatients from `{PATH_TO_LABELS_FILE}`")
     patients_to_labels: Dict[int, List[Tuple[datetime, str]]] = load_labeled_patients_with_tasks(PATH_TO_LABELS_FILE)
     # NOTE Debug: Consider subset of patients
-    # patients_to_labels = {k: v for k, v in list(patients_to_labels.items())[:20]}
+    # patients_to_labels = {k: v for k, v in list(patients_to_labels.items())[:5]}
     logger.info(f"Loaded {len(patients_to_labels)} patients with {sum([len(v) for v in patients_to_labels.values()])} labels")
 
     # Combine two featurizations of each patient: one for the patient's age, and one for the text of every code
