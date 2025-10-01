@@ -155,7 +155,7 @@ def plot_all_task_group_box_plots(df_results: pd.DataFrame,
     
     # Create a unified legend grouped by model type
     df_ = filter_df(df_results, score=score, model_heads=model_heads)
-    model_types = {'CLIMBR': [], 'LLM': [], 'BERT': []}
+    model_types = {'LLM': [], 'CLIMBR': [], 'BERT': []}
     
     # Group models by type
     for model, head in df_[['model', 'head']].drop_duplicates().itertuples(index=False):

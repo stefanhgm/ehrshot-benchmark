@@ -14,7 +14,7 @@ mkdir -p ../../EHRSHOT_ASSETS/figures
 
 python3 ../8_make_results_plots.py \
     --path_to_labels_and_feats_dir ../../EHRSHOT_ASSETS/benchmark \
-    --path_to_results_dir ../../EHRSHOT_ASSETS/experiments/full_run/gteqwen2_7b_instruct_unique_then_list_visits_wo_allconds_w_values_4k_no_labs_single_3_0_full_with_baselines_and_llama \
+    --path_to_results_dir ../../EHRSHOT_ASSETS/experiments/full_run/qwen3_embedding_8b_unique_then_list_visits_wo_allconds_w_values_no_labs_single_3_0_full_with_baselines \
     --path_to_output_dir ../../EHRSHOT_ASSETS/figures \
-    --model_heads "[('count', 'gbm'), ('clmbr', 'lr_lbfgs'), ('llm', 'lr_lbfgs'), ('llm_llama', 'lr_lbfgs')]" \
+    --model_heads "[('llm', 'lr_lbfgs'), ('count', 'gbm'), ('clmbr', 'lr_lbfgs')]" \
     --shot_strat all

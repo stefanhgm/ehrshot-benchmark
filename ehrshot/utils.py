@@ -33,7 +33,7 @@ MODEL_2_INFO: Dict[str, Dict[str, Any]] = {
     #     'heads' : ['lr_lbfgs', ],
     # },
     'llm' : {
-        'label' : 'GTE-Qwen2-7B', # 'LLM',
+        'label' : 'Qwen3-Emb-8B', # 'LLM',
         'heads' : ['lr_lbfgs', ],
     },
     'llm_llama' : {
@@ -65,15 +65,15 @@ HEAD_2_INFO: Dict[str, Dict[str, str]] = {
 SCORE_MODEL_HEAD_2_COLOR = {
     'auroc' : {
         'clmbr' : {
-            'lr_lbfgs' : 'tab:blue',
+            'lr_lbfgs' : 'tab:orange',
         },
         'count' : {
-            'gbm' : 'tab:red',
+            'gbm' : 'tab:green',
             'lr_lbfgs' : 'tab:green',
             'rf' : 'tab:orange',
         },
         'llm' : {
-            'lr_lbfgs' : 'tab:orange',
+            'lr_lbfgs' : 'tab:blue',
         },
         'llm_llama' : {
             'lr_lbfgs' : 'tab:green',
@@ -84,10 +84,10 @@ SCORE_MODEL_HEAD_2_COLOR = {
     },
     'auprc' : {
         'clmbr' : {
-            'lr_lbfgs' : 'tab:blue',
+            'lr_lbfgs' : 'tab:orange',
         },
         'count' : {
-            'gbm' : 'tab:red',
+            'gbm' : 'tab:green',
             'lr_lbfgs' : 'tab:green',
             'rf' : 'tab:orange',
         },
@@ -95,7 +95,7 @@ SCORE_MODEL_HEAD_2_COLOR = {
             'lr_femr' : 'tab:purple',
         },
         'llm' : {
-            'lr_lbfgs' : 'tab:orange',
+            'lr_lbfgs' : 'tab:blue',
         },
         'llm_llama' : {
             'lr_lbfgs' : 'tab:green',

@@ -25,7 +25,7 @@ def _plot_unified_legend(fig, axes, ncol=None, fontsize=8):
     legend_n_col: int = len([x for x in labels if '(Full)' not in x]) if ncol is None else ncol
     
     # Create grouped legends by model type
-    model_types = {'CLIMBR': [], 'LLM': [], 'BERT': []}
+    model_types = {'LLM': [], 'CLIMBR': [], 'BERT': []}
     for label in labels:
         if 'clmbr' in label.lower():
             model_types['CLIMBR'].append(label)
@@ -154,7 +154,7 @@ def plot_one_labeling_function(df: pd.DataFrame,
 
             # Plot average line across all subtasks with improved styling
             df_ = df_means_.groupby(['k']).agg({'value': 'mean', 'k': 'first'}).reset_index(drop=True)
-            marker = 'X' if 'clmbr' in model.lower() else ('o' if 'llm' in model.lower() else 'p')
+            marker = 'o' if 'clmbr' in model.lower() else ('X' if 'llm' in model.lower() else 'p')
             ax.plot(df_['k'], df_['value'], color=color, 
                    label=f'{model_name}+{head_name}',
                    linestyle='-', marker=marker, 
@@ -274,7 +274,7 @@ def plot_one_task_group(df: pd.DataFrame,
     
             # Plot average line per model with improved styling
             df_ = df_means_.groupby(['k']).agg({'value': 'mean', 'k': 'first'}).reset_index(drop=True)
-            marker = 'X' if 'clmbr' in model.lower() else ('o' if 'llm' in model.lower() else 'p')
+            marker = 'o' if 'clmbr' in model.lower() else ('X' if 'llm' in model.lower() else 'p')
             ax.plot(df_['k'], df_['value'], color=color, 
                    label=f'{model_name}+{head_name}',
                    linestyle='-', marker=marker, 

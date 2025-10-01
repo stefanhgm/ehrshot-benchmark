@@ -60,12 +60,12 @@
                 // "--text_encoder", "llm2vec_llama3_1_7b_instruct_mimic_/mntp-supervised-mednli/Meta-Llama-3.1-8B-Instruct_1000_mntp_steps/MedNLI_train_m-Meta-Llama-3.1-8B-Instruct_l-512/checkpoint-200",
                 // "--text_encoder", "gteqwen2_7b_instruct",
                 // "--text_encoder", "gteqwen2_1_5b_instruct",
-                // "--text_encoder", "deberta_v3_base",
+                "--text_encoder", "medbert",
                 // "--text_encoder", "gteqwen2_7b_instruct_chunked_512",
                 // "--text_encoder", "llm2vec_llama3_1_7b_instruct_supervised_chunked_2k",
                 // "--text_encoder", "llm2vec_llama3_1_7b_instruct_supervised_chunked_512",
                 // "--text_encoder", "qwen3_embedding_8b",
-                "--text_encoder", "qwen3_embedding_0_6b",
+                // "--text_encoder", "qwen3_embedding_0_6b",
                 "--task_to_instructions", "~/ehrshot-benchmark/ehrshot/serialization/task_to_instructions.json",
                 // "--task_to_instructions", "",
                 // "--serialization_strategy", "unique_then_list_visits_wo_allconds_w_values_4k_no_demographics",
@@ -88,8 +88,10 @@
                 // "--serialization_strategy", "unique_then_list_visits_wo_allconds_w_values_4k_only_visits_only_medications",
                 // "--serialization_strategy", "unique_then_list_visits_wo_allconds_w_values_4k_only_visits_only_procedures",
                 // "--serialization_strategy", "unique_then_list_visits_wo_allconds_w_values_512",
-                "--serialization_strategy", "unique_then_list_visits_wo_allconds_w_values_4k",  // "unique_then_list_visits_wo_allconds_w_values_4k"
+                // "--serialization_strategy", "unique_then_list_visits_wo_allconds_w_values_4k",  // "unique_then_list_visits_wo_allconds_w_values_4k"
+                // "--serialization_strategy", "unique_then_list_visits_wo_allconds_w_values_8k_yaml",
                 // "--serialization_strategy", "unique_then_list_visits_wo_allconds_w_values",
+                "--serialization_strategy", "unique_events_list_recent_w_time_8k",
                 "--excluded_ontologies", "no_labs_single",
                 "--num_aggregated", "3",
                 "--time_window_days", "0",
@@ -160,11 +162,17 @@
                 // "--second_source_filter", "llm,lr_lbfgs",
                 // "--output_dir", "~/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run/gteqwen2_7b_instruct_unique_then_list_visits_wo_allconds_w_values_4k_no_labs_single_3_0_full_with_baselines",
                 // Then combine with llm2vec
-                "--first_source_dir", "~/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run/gteqwen2_7b_instruct_unique_then_list_visits_wo_allconds_w_values_4k_no_labs_single_3_0_full_with_baselines",
-                "--first_source_filter", "count,gbm;clmbr,lr_lbfgs;llm,lr_lbfgs",
-                "--second_source_dir", "~/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run/llm2vec_llama3_1_7b_instruct_supervised_unique_then_list_visits_wo_allconds_w_values_4k_no_labs_single_3_0_full_renamed",
-                "--second_source_filter", "llm_llama,lr_lbfgs",
-                "--output_dir", "~/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run/gteqwen2_7b_instruct_unique_then_list_visits_wo_allconds_w_values_4k_no_labs_single_3_0_full_with_baselines_and_llama"
+                // "--first_source_dir", "~/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run/gteqwen2_7b_instruct_unique_then_list_visits_wo_allconds_w_values_4k_no_labs_single_3_0_full_with_baselines",
+                // "--first_source_filter", "count,gbm;clmbr,lr_lbfgs;llm,lr_lbfgs",
+                // "--second_source_dir", "~/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run/llm2vec_llama3_1_7b_instruct_supervised_unique_then_list_visits_wo_allconds_w_values_4k_no_labs_single_3_0_full_renamed",
+                // "--second_source_filter", "llm_llama,lr_lbfgs",
+                // "--output_dir", "~/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run/gteqwen2_7b_instruct_unique_then_list_visits_wo_allconds_w_values_4k_no_labs_single_3_0_full_with_baselines_and_llama"
+                // Combine baseline with qwen3
+                "--first_source_dir", "~/ehrshot-benchmark/EHRSHOT_ASSETS_BASELINES/results_complete",
+                "--first_source_filter", "count,gbm;clmbr,lr_lbfgs",
+                "--second_source_dir", "/home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run/qwen3_embedding_8b_unique_then_list_visits_wo_allconds_w_values_no_labs_single_3_0_full",
+                "--second_source_filter", "llm,lr_lbfgs",
+                "--output_dir", "/home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run/qwen3_embedding_8b_unique_then_list_visits_wo_allconds_w_values_no_labs_single_3_0_full_with_baselines"
             ]
         },
 
@@ -177,10 +185,27 @@
             "console": "integratedTerminal",
             "args": [
                 // "--llm_source_embeddings", "~/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run/gteqwen2_7b_instruct_unique_then_list_visits_wo_allconds_w_values_4k_no_labs_single_3_0_full/llm_features.pkl",
-                "--llm_source_embeddings", "~/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run/llm2vec_llama3_1_7b_instruct_supervised_unique_then_list_visits_wo_allconds_w_values_4k_no_labs_single_3_0_full/llm_features.pkl",
+                // "--llm_source_embeddings", "~/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run/llm2vec_llama3_1_7b_instruct_supervised_unique_then_list_visits_wo_allconds_w_values_4k_no_labs_single_3_0_full/llm_features.pkl",
+                "--llm_source_embeddings", "~/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run/qwen3_embedding_8b_unique_then_list_visits_wo_allconds_w_values_no_labs_single_3_0_full_combined_clmbr/llm_features_qwen3_original.pkl",
                 "--clmbr_source_embeddings", "~/ehrshot-benchmark/EHRSHOT_ASSETS_BASELINES/features/clmbr_features.pkl",
                 // "--output_dir", "~/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run/gteqwen2_7b_instruct_unique_then_list_visits_wo_allconds_w_values_4k_no_labs_single_3_0_full_combined_clmbr",
-                "--output_dir", "~/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run/llm2vec_llama3_1_7b_instruct_supervised_unique_then_list_visits_wo_allconds_w_values_4k_no_labs_single_3_0_full_combined_clmbr",
+                // "--output_dir", "~/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run/llm2vec_llama3_1_7b_instruct_supervised_unique_then_list_visits_wo_allconds_w_values_4k_no_labs_single_3_0_full_combined_clmbr",
+                "--output_dir", "~/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run/qwen3_embedding_8b_unique_then_list_visits_wo_allconds_w_values_no_labs_single_3_0_full_combined_clmbr",
+            ]
+        },
+
+        {
+            "name": "Python Debugger: join_llm_embeddings.py",
+            "type": "debugpy",
+            "request": "launch",
+            "justMyCode": false,
+            "program": "${workspaceFolder}/ehrshot/helper/join_llm_embeddings.py",
+            "console": "integratedTerminal",
+            "args": [
+                // "--llm_source_embeddings_list", "/home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run_meme/medbert_unique_then_list_visits_wo_allconds_w_values_4k_only_demographics_no_labs_single_3_0_full/llm_features.pkl /home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run_meme/medbert_unique_then_list_visits_wo_allconds_w_values_4k_only_aggregated_events_only_aggregated_body_metrics_no_labs_single_3_0_full/llm_features.pkl /home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run_meme/medbert_unique_then_list_visits_wo_allconds_w_values_4k_only_aggregated_events_only_aggregated_vital_signs_no_labs_single_3_0_full/llm_features.pkl /home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run_meme/medbert_unique_then_list_visits_wo_allconds_w_values_4k_only_aggregated_events_only_aggregated_lab_results_no_labs_single_3_0_full/llm_features.pkl /home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run_meme/medbert_unique_then_list_visits_wo_allconds_w_values_4k_only_visits_no_labs_single_3_0_full/llm_features.pkl /home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run_meme/medbert_unique_then_list_visits_wo_allconds_w_values_4k_only_visits_only_conditions_no_labs_single_3_0_full/llm_features.pkl /home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run_meme/medbert_unique_then_list_visits_wo_allconds_w_values_4k_only_visits_only_medications_no_labs_single_3_0_full/llm_features.pkl /home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run_meme/medbert_unique_then_list_visits_wo_allconds_w_values_4k_only_visits_only_procedures_no_labs_single_3_0_full/llm_features.pkl",
+                // "--output_dir", "/home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run_meme/medbert_unique_then_list_visits_wo_allconds_w_values_4k_meme",
+                "--llm_source_embeddings_list", "/home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run_meme/qwen3_embedding_8b_unique_then_list_visits_wo_allconds_w_values_4k_only_demographics_no_labs_single_3_0_full/llm_features.pkl /home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run_meme/qwen3_embedding_8b_unique_then_list_visits_wo_allconds_w_values_4k_only_aggregated_events_only_aggregated_body_metrics_no_labs_single_3_0_full/llm_features.pkl /home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run_meme/qwen3_embedding_8b_unique_then_list_visits_wo_allconds_w_values_4k_only_aggregated_events_only_aggregated_vital_signs_no_labs_single_3_0_full/llm_features.pkl /home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run_meme/qwen3_embedding_8b_unique_then_list_visits_wo_allconds_w_values_4k_only_aggregated_events_only_aggregated_lab_results_no_labs_single_3_0_full/llm_features.pkl /home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run_meme/qwen3_embedding_8b_unique_then_list_visits_wo_allconds_w_values_4k_only_visits_no_labs_single_3_0_full/llm_features.pkl /home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run_meme/qwen3_embedding_8b_unique_then_list_visits_wo_allconds_w_values_4k_only_visits_only_conditions_no_labs_single_3_0_full/llm_features.pkl /home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run_meme/qwen3_embedding_8b_unique_then_list_visits_wo_allconds_w_values_4k_only_visits_only_medications_no_labs_single_3_0_full/llm_features.pkl /home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run_meme/qwen3_embedding_8b_unique_then_list_visits_wo_allconds_w_values_4k_only_visits_only_procedures_no_labs_single_3_0_full/llm_features.pkl",
+                "--output_dir", "/home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run_meme/qwen3_embedding_8b_unique_then_list_visits_wo_allconds_w_values_4k_meme",
             ]
         }
     ]
