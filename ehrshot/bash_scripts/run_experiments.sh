@@ -30,6 +30,7 @@ text_encoders=(
     # "llm2vec_llama3_1_7b_instruct_supervised_chunked_512"
     # "llm2vec_llama2_sheared_1_3b_supervised"
     # "bioclinicalbert"
+    # "medbert"
     # "deberta_v3_base"
     # "deberta_v3_large"
     # "bert_base"
@@ -61,7 +62,8 @@ text_encoders=(
 
 #     Ablations adding EHR serialization parts
 #     "unique_then_list_visits_wo_allconds_w_values_4k_only_demographics"
-#     "unique_then_list_visits_wo_allconds_w_values_4k_only_aggregated_events_only_aggregated_body_metrics_only_aggregated_vital_signs_only_aggregated_lab_results"
+#     "unique_then_list_visits_wo_allconds_w_values_4k_only_aggregated_events_only_aggregated_body_metrics
+#      _only_aggregated_vital_signs_only_aggregated_lab_results"
 #     "unique_then_list_visits_wo_allconds_w_values_4k_only_aggregated_events_only_aggregated_body_metrics"
 #     "unique_then_list_visits_wo_allconds_w_values_4k_only_aggregated_events_only_aggregated_vital_signs"
 #     "unique_then_list_visits_wo_allconds_w_values_4k_only_aggregated_events_only_aggregated_lab_results"
@@ -77,10 +79,18 @@ text_encoders=(
 #     "unique_then_list_visits_w_values_4k"
 #     "unique_then_list_visits"
 #     "unique_then_list_visits_4k"
-#)
+
+#     "unique_then_list_visits_wo_allconds_w_values_8k_json"
+#     "unique_then_list_visits_wo_allconds_w_values_8k_xml"
+#     "unique_then_list_visits_wo_allconds_w_values_8k_yaml"
+#     "unique_events_list_8k"
+#     "unique_events_list_w_time_8k"
+#     "unique_events_list_recent_8k"
+#     "unique_events_list_recent_w_time_8k"
+# )
 
 # Selected serialization and settings
-serialization_strategies=("unique_then_list_visits_wo_allconds_w_values_4k")
+serialization_strategies=("unique_then_list_visits_wo_allconds_w_values")
 
 # Fixed options
 instructions_options=("true")

@@ -780,8 +780,6 @@ class UniqueEventsListStrategy(SerializationStrategy):
         all_events = list(ehr_serializer.static_events)
         for visit in ehr_serializer.visits:
             all_events.extend(visit.events)
-
-        # Sort earliest -> oldest
         all_events.sort(key=lambda e: e.start)
 
         uniq = self.get_unique_events(all_events)
@@ -800,8 +798,42 @@ class UniqueEventsListWithTimeStrategy(SerializationStrategy):
         for visit in ehr_serializer.visits:
             all_events.extend(visit.events)
 
-        # Sort earliest -> oldest
         all_events.sort(key=lambda e: e.start)
+
+        uniq = self.get_unique_events(all_events)
+        # Render as a simple list with dates
+        x = '\n'.join([f"{event.start}: {self.serialize_event(event, numeric_values=True)[2:]}" for event in uniq])
+        return x
+
+
+class UniqueEventsListRecentStrategy(SerializationStrategy):
+    def __init__(self, num_aggregated_events: int, ablation: list[str] = []):
+        self.num_aggregated_events = num_aggregated_events
+        self.ablation = ablation
+
+    def serialize(self, ehr_serializer, label_time: datetime) -> str:
+        # Collect all events
+        all_events = list(ehr_serializer.static_events)
+        for visit in ehr_serializer.visits:
+            all_events.extend(visit.events)
+        all_events.sort(key=lambda e: e.start, reverse=True)
+
+        uniq = self.get_unique_events(all_events)
+        x = '\n'.join([self.serialize_event(event, numeric_values=True)[2:] for event in uniq])
+        return x
+
+
+class UniqueEventsListRecentWithTimeStrategy(SerializationStrategy):
+    def __init__(self, num_aggregated_events: int, ablation: list[str] = []):
+        self.num_aggregated_events = num_aggregated_events
+        self.ablation = ablation
+
+    def serialize(self, ehr_serializer, label_time: datetime) -> str:
+        # Collect all events
+        all_events = list(ehr_serializer.static_events)
+        for visit in ehr_serializer.visits:
+            all_events.extend(visit.events)
+        all_events.sort(key=lambda e: e.start, reverse=True)
 
         uniq = self.get_unique_events(all_events)
         # Render as a simple list with dates

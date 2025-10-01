@@ -9,7 +9,7 @@ import numpy as np
 # NOTE: workaround for LLM2Vec models that are not compatible with most recent transformers library for ModernBERT, Qwen3
 # from serialization.text_encoder import LLM2VecLlama2_Sheared_1_3B_SupervisedEncoder, LLM2VecLlama3_1_7B_InstructSupervisedEncoder, LLM2VecLlama3_1_7B_InstructSupervisedChunkedEncoder
 from serialization.text_encoder import TextEncoder,  GTEQwen2_7B_InstructEncoder, GTEQwen2_1_5B_InstructEncoder, STGTELargeENv15Encoder, BertEncoder, GTEQwen2_7B_InstructChunkedEncoder, Qwen3Embedding_8B_Encoder, Qwen3Embedding_4B_Encoder, Qwen3Embedding_0_6B_Encoder
-from serialization.ehr_serializer import UniqueThenListVisitsStrategy, UniqueThenListVisitsWithValuesStrategy, UniqueThenListVisitsWOAllCondsStrategy, UniqueThenListVisitsWOAllCondsWithValuesStrategy, UniqueThenListVisitsWOAllCondsWithValuesJSONStrategy, UniqueThenListVisitsWOAllCondsWithValuesXMLStrategy, UniqueThenListVisitsWOAllCondsWithValuesYAMLStrategy, UniqueEventsListStrategy, UniqueEventsListWithTimeStrategy
+from serialization.ehr_serializer import UniqueThenListVisitsStrategy, UniqueThenListVisitsWithValuesStrategy, UniqueThenListVisitsWOAllCondsStrategy, UniqueThenListVisitsWOAllCondsWithValuesStrategy, UniqueThenListVisitsWOAllCondsWithValuesJSONStrategy, UniqueThenListVisitsWOAllCondsWithValuesXMLStrategy, UniqueThenListVisitsWOAllCondsWithValuesYAMLStrategy, UniqueEventsListStrategy, UniqueEventsListWithTimeStrategy, UniqueEventsListRecentStrategy, UniqueEventsListRecentWithTimeStrategy 
 from datetime import datetime, timedelta
 from llm_featurizer import LLMFeaturizer, preprocess_llm_featurizer, featurize_llm_featurizer, load_labeled_patients_with_tasks
 import json
@@ -92,6 +92,8 @@ if __name__ == "__main__":
         'unique_then_list_visits_wo_allconds_w_values_8k_yaml': (UniqueThenListVisitsWOAllCondsWithValuesYAMLStrategy, 8192),
         'unique_events_list_8k': (UniqueEventsListStrategy, 8192), 
         'unique_events_list_w_time_8k': (UniqueEventsListWithTimeStrategy, 8192), 
+        'unique_events_list_recent_8k': (UniqueEventsListRecentStrategy, 8192), 
+        'unique_events_list_recent_w_time_8k': (UniqueEventsListRecentWithTimeStrategy, 8192), 
     }
 
     # Determine serialization strategy and max input length
@@ -130,6 +132,7 @@ if __name__ == "__main__":
         'qwen3_embedding_0_6b': Qwen3Embedding_0_6B_Encoder,
         'st_gte_large_en_v15': STGTELargeENv15Encoder,
         'bioclinicalbert': lambda max_input_length: BertEncoder(max_input_length=max_input_length, bert_identifier='emilyalsentzer/Bio_ClinicalBERT', embedding_size=768, model_max_input_length=512), 
+        'medbert': lambda max_input_length: BertEncoder(max_input_length=max_input_length, bert_identifier='Charangan/MedBERT', embedding_size=768, model_max_input_length=512), 
         'bert_base': lambda max_input_length: BertEncoder(max_input_length=max_input_length, bert_identifier='bert-base-uncased', embedding_size=768, model_max_input_length=512),
         'bert_large': lambda max_input_length: BertEncoder(max_input_length=max_input_length, bert_identifier='bert-large-uncased', embedding_size=1024, model_max_input_length=512),
         'deberta_v3_base': lambda max_input_length: BertEncoder(max_input_length=max_input_length, bert_identifier='microsoft/deberta-v3-base', embedding_size=768, model_max_input_length=512),
