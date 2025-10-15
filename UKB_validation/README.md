@@ -1,93 +1,76 @@
-# LLM2Vec
+# External validation on UKB
 
+In the following, the steps for performing the external validation on the UK Biobank data are provided.
 
+### Environment
 
-## Getting started
+Due to different requirements of the different models, at least two conda environments have to be created. 
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+LLM2Vec - for general use
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
-
-## Add your files
-
-- [ ] [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-- [ ] [Add files using the command line](https://docs.gitlab.com/ee/gitlab-basics/add-file.html#add-a-file-using-the-command-line) or push an existing Git repository with the following command:
-
-```
-cd existing_repo
-git remote add origin https://git.bihealth.org/gear11/llm2vec.git
-git branch -M main
-git push -uf origin main
+```python
+#Requires python=3.10.16
+conda env create -f environment_llm2vec.yml
 ```
 
-## Integrate with your tools
+Qwen - for creation of Qwen3 embeddings
 
-- [ ] [Set up project integrations](https://git.bihealth.org/gear11/llm2vec/-/settings/integrations)
+```python
+# Requires python=3.10.18
+conda env create -f environment_qwen.yml
+```
 
-## Collaborate with your team
+## Validation on UKB and CLMBR
 
-- [ ] [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-- [ ] [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-- [ ] [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-- [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-- [ ] [Set auto-merge](https://docs.gitlab.com/ee/user/project/merge_requests/merge_when_pipeline_succeeds.html)
+### Embedding creation UKB
 
-## Test and Deploy
+**Required data**
 
-Use the built-in continuous integration in GitLab.
+- UKB data is usable in case you are an eligible researcher.
+- Different tables have to be present in specific location (change location path in [LM2Vec.py](http://LM2Vec.py) - UKB_data_path)
+    - big_dataset: dataportal_final_records_omop_240625_mapped_eids_inpatient_updated
+        - generated using raw UKB data, mapped following the code from https://github.com/JakobSteinfeldt/MedicalHistoryPhenomeWide/tree/cb5d2c1d60b5fe479d88f1d498f0a610b846f9b9/1_data_preparation
+        - After creating larger table with patient information, data is checked that no patient information is going over the admission date - which would be data leakage (Inpatient_mapping.py)
+    - length_of_stay_path file: contains information of patient’s length of stay in hospital - taken from UKB
+    - covariates: File containing [eid, gender, ethnic_background, birth_date] of patients. Columns should be named ['eid', 'sex_f31_0_0', 'ethnic_background_f21000_0_0', 'birth_date']
+- Huggingface access to models LLM2Vec, gte-Qwen2-7B-instruct and Qwen3-Embedding-8B
+    - In [LLM2Vec.py](http://LLM2Vec.py) script the HF token has to be included
+    - Clone LLM2Vec into Project folder (https://github.com/McGill-NLP/llm2vec) - required in LLM2Vec_embeddingscreation.py to generate LLM2Vec embeddings
+    - HF models:
+        - https://huggingface.co/McGill-NLP/LLM2Vec-Meta-Llama-3-8B-Instruct-mntp-supervised
+        - https://huggingface.co/Alibaba-NLP/gte-Qwen2-7B-instruct
+        - https://huggingface.co/Qwen/Qwen3-Embedding-8B
 
-- [ ] [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/index.html)
-- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-- [ ] [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-- [ ] [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-- [ ] [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
+**Steps**
 
-***
+- Generate embeddings for all models (LLM2Vec, Qwen2 and Qwen3)
+    - bash script LLM2Vec_run_diseases.sh can be used. Here, most importantly, select the model (LLM2Vec/Qwen(2)/Qwen3) for which to calculate the embeddings for. In case only inference should be performed, just select the inference option.
+- Save all embeddings in a folder
 
-# Editing this README
+### Embedding creation CLMBR
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+**Required data**
 
-## Suggestions for a good README
+- Access to CLMBR data can be gained by applying for it (for more visit https://som-shahlab.github.io/ehrshot-website/)
+- After gaining access, download weights:
+    - https://huggingface.co/StanfordShahLab/clmbr-t-base
+- Download athena library from https://athena.ohdsi.org/search-terms/start
+- UKB data:
+    - dataportal_final_records_omop_240625_mapped_eids(_inpatient_updated*)* (see required data for UKB)
+    - covariates file (see required data for UKB)
+- After downloading, data was cleaned using the script …
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+**Steps**
 
-## Name
-Choose a self-explaining name for your project.
+- Having all data in the correct location, the following scripts can be run for calculating the evaluation for CLMBR. Both scripts are in folder clmbr_baseline. Two steps are required where 1. UKB data is mapped to the format usable by CLMBR and 2. this converted data is used for creating embeddings. Bash scripts clmbr_baseline.sh and clmbr_calc_embeddings.sh contain a parameter configuration for how to run the programs.
+- First, run script clmbr_baseline.py for converting UKB data into clmbr format (generates feather files) - folder has to be adapted to your structure
+- Use this file to create embeddings for the clmbr baseline using script clmbr_baseline_create_embeddings.py (also change folder path here). This script has to be run twice for generating 1. data in MEDS format and using this format in clmbr to 2. generate the embeddings. (For this the value of Calculate_MEDS_format_only has to be set to True or False)
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+### Evaluation
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+- Results are written into folders “images” and “Tables”, in which a folder “death”, “disease_onset” and “hospitalization” should be present.
+- For evaluation, the bash script LLM2Vec_run_diseases.sh can be used
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+### Paper Figure creation
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
-
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
-
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
-
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
-
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
-
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
-
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
-
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
-
-## License
-For open source projects, say how it is licensed.
-
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+- Figure generation was done using script “Final_experiment_results.ipynb” in the “Scripts” folder. Potentialy change the parameters on top of the script if max_token_length is different or auprc/ auroc should be calculated. Required Folder “Results_Paper” for result files is generated in code as well
