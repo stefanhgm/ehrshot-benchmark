@@ -92,12 +92,12 @@ def load_data(config):
             records_path = config['big_dataset_path_clmbr']
         else:
             records_path = config['big_dataset_path']
-        records_path_indications = config['standard_dataset_path'] #to get indications from future
+        records_path_indications = config['big_dataset_path'] #to get indications from future
     elif config['use_raw_dataset']:
         records_path = config['raw_dataset_path']
-        records_path_indications = config['standard_dataset_path'] #to get indications from future
+        records_path_indications = config['big_dataset_path'] #to get indications from future
     else:
-        records_path = config['standard_dataset_path']
+        records_path = config['big_dataset_path']
     
     # Read data with appropriate transformations
     if not config['use_raw_dataset']:

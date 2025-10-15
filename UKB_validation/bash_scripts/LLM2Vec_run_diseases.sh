@@ -5,7 +5,7 @@ CODE_DIR=/home/gear11/ehrshot-benchmark/UKB_validation/LLM2Vec_project/bash_scri
 
 cd $CODE_DIR
 
-
+inference=False #select if embeddings should be calculated for models of interest for the three predictiony task groups or inference should be done (first embeddings have to be calculated)
 
 #source ~/.bashrc
 #conda init
@@ -14,7 +14,7 @@ cd $CODE_DIR
 #conda activate /sc-projects/sc-proj-ukb-cvd/environments/LLM
 
 # List of diseases from medical history paper
-diseases=(
+diseases_inference=(
     ### Hospitalization
     #"hospitalization,admin_hospital"   
     "hospitalization,OMOP_9201"   
@@ -53,65 +53,50 @@ diseases=(
     "Suicide ideation and attempt or self harm,phecode_MB_284"
 )
 
-# CLMBR_diseases=(
-#     "Hyperlipidemia, "
-#     "Pancreatic cancer, "
-#     "Celiac, "
-#     "Lupus, "
-# )
-
 # only if calculating embeddings for diseaseunspecific version
-# diseases=(
-#     # "Rheumatoid arthritis and other inflammatory polyarthropathies,phecode_MS_705.1"
-#     "hospitalization,OMOP_9201" #"hospitalization,admin_hospital"
-#     #"death,OMOP_4306655" #"death,admin_death"
-# )
+diseases_embeddings=(
+    "Rheumatoid arthritis and other inflammatory polyarthropathies,phecode_MS_705.1"
+    "hospitalization,OMOP_9201" #"hospitalization,admin_hospital"
+    "death,OMOP_4306655" #"death,admin_death"
+)
 
+# just in case calculation of all patients at once takes too long
 start_end=(
     # "0,80000"
     # "80000,170000"
     # "170000,260000"
     # "260000,400000"
     "0,400000"
-    # "40000,80000"
-    # "80000,130000"
-    # "130000,170000"
-    # "170000,210000"
-    # "210000,260000"
-    # "260000,300000"
-    # "300000,400000"
-    # "270000,280000"
-    # "280000,290000"
-    # "290000,300000"
-    # "260000,400000"
-    # "260000,300000"
-    # "300000,330000"
-    # "330000,400000"
-    # "0,130000"
-    # "130000,260000"
-    #"0,400000"
-    # "0,1700000"
-    # "1700000,4000000"
 )
 
 dataset=(
-    "--use_big_dataset"
+    "--use_big_dataset" 
     #"--use_raw_dataset"
 )
+
 
 num_PCA=0 #set to 0 if you don't want to use PCA
 minyears=0
 maxyears=1
 
 # Define the models to use
-models=(
-    #"LLM2Vec"
-    # "Qwen"
-    #"Qwen3"
+models_embeddings=(
+    "LLM2Vec"
+    "Qwen"
+    "Qwen3"
     # "NVEmbed"
+)
+models_inference=(
     "runall"
 )
 balanced_inference=True # only works for runall model option
+
+if [ $inference ]; then
+    diseases=("${diseases_inference[@]}")
+    models=("${models_inference[@]}")
+else
+    diseases=("${diseases_embeddings[@]}")
+    models=("${models_embeddings[@]}")
 
 queryinclusion_options=("True") #("False" "True")
 dateinclusion_options=("True") #("False" "True")

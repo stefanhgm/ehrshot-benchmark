@@ -142,9 +142,9 @@ def main(instruction, task, **kwargs):
 
         # Data paths
         covariates_path = data_path / "baseline_covariates_231016.feather",
-        standard_dataset_path =  f"{UKB_data_path}dataportal_final_records_omop_240625_mapped_eids_inpatient_updated.feather",
+        #standard_dataset_path =  f"{UKB_data_path}dataportal_final_records_omop_240625_mapped_eids_inpatient_updated.feather",
         big_dataset_path = f"{UKB_data_path}dataportal_final_records_omop_240625_mapped_eids_inpatient_updated.feather", #from inpatient_mapping.py file
-        big_dataset_path_clmbr = f"{UKB_data_path}clmbr_ukb_mapping.feather",
+        big_dataset_path_clmbr = f"{UKB_data_path}clmbr_ukb_mapping.feather", #only for evaluation - most likely not required
         raw_dataset_path = "/sc-projects/sc-proj-ukb-cvd/projects/llm2vec/messy/messy_data_before_recruitment.feather", #changed sourcepath
         length_of_stay_path = f"{UKB_data_path}codes_admin_231012_mapped_eids_filtered.feather",
     
@@ -1001,7 +1001,7 @@ if __name__ == '__main__':
     parser.add_argument("--balanced", action="store_true", help="Set to true if calculation train and test split should be balanced.")
     parser.add_argument("--diseaseunspecific", action="store_true", help="Perform calculation disease/ indication unspecific.")
     parser.add_argument("--add_agesex_tensor", type=lambda x: x.lower() == "true", nargs='?', const=True, default=False, help="Set to false to exclude age and sex tensor.")
-    parser.add_argument("--clmbrcodes", type=lambda x: x.lower() == "true", nargs='?', const=True, default=False, help="Only use codes also used in clmbr.")
+    parser.add_argument("--clmbrcodes", type=lambda x: x.lower() == "true", nargs='?', const=True, default=False, help="Only use codes also used in clmbr - as baseline.")
     parser.add_argument("--withPCA", type=int, help="Select if model should be caclulated with PCA and if yes, story the number of PCA components. Default: no PCA (0)", default=0)
     parser.add_argument("--disable_wandb", action="store_true", help="Set to true if wandb should be disabled - e.g. for debugging.")
     parser.add_argument("--get_dataset_overview", action="store_true", help="Set to true if information about task (e.g. dataset size, number of positive samples, .. should be saved to file Patnums.txt).")

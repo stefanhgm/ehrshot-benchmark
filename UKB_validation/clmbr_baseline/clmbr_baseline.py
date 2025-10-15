@@ -169,8 +169,8 @@ clmbr_athena_mapped_direct = clmbr_mapping_unique.merge(
 
 
 ## now read in UKB data and map to clmbr codes 1. without vocabulary, 2. with second vocabulary
-records_path_big = "/sc-projects/sc-proj-ukb-cvd/projects/llm2vec/data/dataportal_final_records_omop_240625_mapped_eids.feather"
-#records_path_big = "/sc-projects/sc-proj-ukb-cvd/projects/llm2vec/data/dataportal_final_records_omop_240625_mapped_eids_inpatient_updated.feather"
+#records_path_big = "/sc-projects/sc-proj-ukb-cvd/projects/llm2vec/data/dataportal_final_records_omop_240625_mapped_eids.feather"
+records_path_big = "/sc-projects/sc-proj-ukb-cvd/projects/llm2vec/data/dataportal_final_records_omop_240625_mapped_eids_inpatient_updated.feather"
 records = pd.read_feather(records_path_big)
 
 # remove all entries after recruitment date
