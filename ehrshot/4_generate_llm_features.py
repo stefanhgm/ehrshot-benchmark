@@ -45,6 +45,11 @@ if __name__ == "__main__":
         ['LOINC', 'Domain', 'CARE_SITE', 'ICDO3', 'RxNorm', 'RxNorm Extension', 'Medicare Specialty', 'CMS Place of Service', 'OMOP Extension', 'Condition Type']  if args.excluded_ontologies == 'no_labs_meds_single' else []
     NUM_AGGREGATED_EVENTS: int = args.num_aggregated  # Default: 0
     FILTER_AGGREGATED_EVENTS: bool = NUM_AGGREGATED_EVENTS > 0
+    # No aggregated events for list strategies
+    if args.serialization_strategy.startswith('unique_events_list_'):
+        NUM_AGGREGATED_EVENTS = 0
+        FILTER_AGGREGATED_EVENTS = False
+        logger.info(f"For serialization strategy `{args.serialization_strategy}` enforce NUM_AGGREGATED_EVENTS={NUM_AGGREGATED_EVENTS}, FILTER_AGGREGATED_EVENTS={FILTER_AGGREGATED_EVENTS}")
     # Convert into None or timedelta in days, hack: use negative numbers as hours
     TIME_WINDOW: timedelta | None = None if args.time_window_days == 0 else (timedelta(days=args.time_window_days) if args.time_window_days > 0 else timedelta(hours=-args.time_window_days))
 

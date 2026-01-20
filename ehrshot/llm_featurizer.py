@@ -319,6 +319,11 @@ class LLMFeaturizer():
         
         def is_visit_event(event: Event) -> bool:
             return event.code.startswith('Visit/')
+
+        # Redefine is_visit_event when Strategy is list-based
+        if self.serialization_strategy.__class__.__name__.startswith('UniqueEventsList'):
+            def is_visit_event(event: Event) -> bool:
+                return False
         
         def resolve_code(code: str, included_ontologies: List[str] = []) -> Optional[str]:
             return self.resolve_code_with_custom_ontologies(ontology, code, included_ontologies)

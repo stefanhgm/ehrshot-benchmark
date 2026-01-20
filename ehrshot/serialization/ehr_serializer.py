@@ -776,10 +776,11 @@ class UniqueEventsListStrategy(SerializationStrategy):
         self.ablation = ablation
 
     def serialize(self, ehr_serializer, label_time: datetime) -> str:
-        # Collect all events
+        # Collect all events, by definition no visits and no aggregated events exist
         all_events = list(ehr_serializer.static_events)
-        for visit in ehr_serializer.visits:
-            all_events.extend(visit.events)
+        assert len(ehr_serializer.visits) == 0, "No visits should exist for this strategy"
+        assert len(ehr_serializer.aggregated_events) == 0, "No aggregated events should exist for this strategy"
+
         all_events.sort(key=lambda e: e.start)
 
         uniq = self.get_unique_events(all_events)
@@ -793,10 +794,10 @@ class UniqueEventsListWithTimeStrategy(SerializationStrategy):
         self.ablation = ablation
 
     def serialize(self, ehr_serializer, label_time: datetime) -> str:
-        # Collect all events
+        # Collect all events, by definition no visits and no aggregated events exist
         all_events = list(ehr_serializer.static_events)
-        for visit in ehr_serializer.visits:
-            all_events.extend(visit.events)
+        assert len(ehr_serializer.visits) == 0, "No visits should exist for this strategy"
+        assert len(ehr_serializer.aggregated_events) == 0, "No aggregated events should exist for this strategy"
 
         all_events.sort(key=lambda e: e.start)
 
@@ -812,10 +813,11 @@ class UniqueEventsListRecentStrategy(SerializationStrategy):
         self.ablation = ablation
 
     def serialize(self, ehr_serializer, label_time: datetime) -> str:
-        # Collect all events
+        # Collect all events, by definition no visits and no aggregated events exist
         all_events = list(ehr_serializer.static_events)
-        for visit in ehr_serializer.visits:
-            all_events.extend(visit.events)
+        assert len(ehr_serializer.visits) == 0, "No visits should exist for this strategy"
+        assert len(ehr_serializer.aggregated_events) == 0, "No aggregated events should exist for this strategy"
+
         all_events.sort(key=lambda e: e.start, reverse=True)
 
         uniq = self.get_unique_events(all_events)
@@ -829,10 +831,11 @@ class UniqueEventsListRecentWithTimeStrategy(SerializationStrategy):
         self.ablation = ablation
 
     def serialize(self, ehr_serializer, label_time: datetime) -> str:
-        # Collect all events
+        # Collect all events, by definition no visits and no aggregated events exist
         all_events = list(ehr_serializer.static_events)
-        for visit in ehr_serializer.visits:
-            all_events.extend(visit.events)
+        assert len(ehr_serializer.visits) == 0, "No visits should exist for this strategy"
+        assert len(ehr_serializer.aggregated_events) == 0, "No aggregated events should exist for this strategy"
+
         all_events.sort(key=lambda e: e.start, reverse=True)
 
         uniq = self.get_unique_events(all_events)
