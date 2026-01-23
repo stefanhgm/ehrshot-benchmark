@@ -8,6 +8,8 @@ EXPERIMENT_IDENTIFIER="full_run" # _w_dates
 BASE_DIR="/home/sthe14/ehrshot-benchmark"
 SCRIPT_DIR="$BASE_DIR/ehrshot"
 INSTRUCTIONS_FILE="${BASE_DIR}/ehrshot/serialization/task_to_instructions.json"
+# INSTRUCTIONS_FILE="${BASE_DIR}/ehrshot/serialization/task_to_instructions_list.json"
+# INSTRUCTIONS_FILE="${BASE_DIR}/ehrshot/serialization/task_to_instructions_list_w_time.json"
 # NOTE: Set to experiment path --> only LLM
 # NOTE: Set to final_exp path --> LR and CLIMBR as well
 EXPERIMENTS_DIR="$BASE_DIR/EHRSHOT_ASSETS/experiments/$EXPERIMENT_IDENTIFIER"

@@ -799,6 +799,10 @@ class UniqueEventsListWithTimeStrategy(SerializationStrategy):
         assert len(ehr_serializer.visits) == 0, "No visits should exist for this strategy"
         assert len(ehr_serializer.aggregated_events) == 0, "No aggregated events should exist for this strategy"
 
+        # Normalize all dates to constant label time and prediction time
+        for e in all_events:
+            e.start = CONSTANT_LABEL_TIME - (label_time - e.start)
+
         all_events.sort(key=lambda e: e.start)
 
         uniq = self.get_unique_events(all_events)
@@ -835,6 +839,10 @@ class UniqueEventsListRecentWithTimeStrategy(SerializationStrategy):
         all_events = list(ehr_serializer.static_events)
         assert len(ehr_serializer.visits) == 0, "No visits should exist for this strategy"
         assert len(ehr_serializer.aggregated_events) == 0, "No aggregated events should exist for this strategy"
+
+        # Normalize all dates to constant label time and prediction time
+        for e in all_events:
+            e.start = CONSTANT_LABEL_TIME - (label_time - e.start)
 
         all_events.sort(key=lambda e: e.start, reverse=True)
 
