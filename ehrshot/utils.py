@@ -34,6 +34,7 @@ MODEL_2_INFO: Dict[str, Dict[str, Any]] = {
     # },
     'llm' : {
         'label' : 'Qwen3-Emb-8B', # 'LLM',
+        # 'heads' : ['gbm', ],
         'heads' : ['lr_lbfgs', ],
     },
     'llm_llama' : {
