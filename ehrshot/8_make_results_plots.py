@@ -24,6 +24,28 @@ from plot import (
     _plot_unified_legend,
 )
 
+# # Replace default colors with toned-down versions
+# from matplotlib import cycler
+# TONED_DOWN_CYCLE = ['#0074B6', '#E08E00', '#009F70', '#D03500', '#7D6D8A', '#785D36', '#C9827C', '#608376', '#8AC64A', '#00B9F6']
+# # Map Matplotlib's TAB10 names -> your toned-down hexes (same order)
+# TAB10_NAMES = [
+#     'tab:blue', 'tab:orange', 'tab:green', 'tab:red', 'tab:purple',
+#     'tab:brown', 'tab:pink', 'tab:gray', 'tab:olive', 'tab:cyan'
+# ]
+# TAB_TO_TONED = dict(zip(TAB10_NAMES, TONED_DOWN_CYCLE))
+# 
+# def _replace_tabcolors_inplace(d):
+#     """Recursively replace 'tab:*' color names with toned-down hexes in a nested dict."""
+#     for k, v in d.items():
+#         if isinstance(v, dict):
+#             _replace_tabcolors_inplace(v)
+#         else:
+#             if isinstance(v, str) and v in TAB_TO_TONED:
+#                 d[k] = TAB_TO_TONED[v]
+# 
+# # Apply once so all consumers (lines, patches, legends) pick up the toned colors
+# _replace_tabcolors_inplace(SCORE_MODEL_HEAD_2_COLOR)
+
 def plot_all_labeling_functions(df_results: pd.DataFrame, 
                               score: str, 
                               path_to_output_dir: str,
@@ -105,9 +127,11 @@ def plot_all_task_groups(df_results: pd.DataFrame,
                             path_to_output_dir=path_to_output_dir,
                             model_heads=model_heads,
                             is_x_scale_log=is_x_scale_log)
+        # Added Mean scores for task groups
+        axes.flat[idx].set_ylabel(f"Mean {score.upper()}")
     
     # Enhanced plot aesthetics
-    fig.suptitle(f'{score.upper()} by Task Group', 
+    fig.suptitle(f'Mean {score.upper()} by Task Group', 
                  fontsize=16, fontweight='bold')
     
     # Create a unified legend for the entire figure
