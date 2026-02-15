@@ -1,5 +1,5 @@
 {
-    "instruction_prefix": "Given a patient's electronic healthcare record (EHR) in Markdown format, retrieve relevant passages that answer the query:",
+    "instruction_prefix": "Given a patient's electronic healthcare record (EHR) as a newline separated list, retrieve relevant passages that answer the query:",
     "guo_los": "what are the key clinical features of the patient to predict future medical events",
     "guo_readmission": "what are the key clinical features of the patient to predict future medical events",
     "guo_icu": "what are the key clinical features of the patient to predict future medical events",

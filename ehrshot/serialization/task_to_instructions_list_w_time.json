@@ -1,5 +1,4 @@
 {
-    "instruction_prefix_long": "We will provide you with a patient's electronic healthcare record (EHR) in Markdown format, which contains routinely collected clinical events such as conditions, procedures, lab tests, and a medication history. The record includes a section called 'General Events', which lists events not tied to a specific visit, and a section called 'Medical History', which contains previous visits with the number of days before the prediction time and their associated events.",
     "instruction_prefix": "Given a patient's electronic healthcare record (EHR) as a newline separated list with dates and times, retrieve relevant passages that answer the query:",
     "guo_los": "will the patient stay in the hospital for more than 7 days",
     "guo_readmission": "will the patient be readmitted to the hospital within 30 days",
