@@ -43,6 +43,8 @@ def format_one_decimal(x):
 def format_two_decimals(x):
     return f"{x:.2f}"
 
+# List serialization filters for aggregated events, so that they stay event when LOINC excluded
+# But list serialization does not use processing of aggregated events, i.e. heart rate can occur for LOINC/8867-4 (heart rate) and SNOMED/78564009 (pulse rate), this only depends on the description
 AGGREGATED_EVENTS = {
     'Heart rate': {
         'codes': ['LOINC/8867-4', 'SNOMED/364075005', 'SNOMED/78564009'],
