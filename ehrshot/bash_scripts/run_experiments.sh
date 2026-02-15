@@ -4,12 +4,13 @@ EHRSHOT_ENV="EHRSHOT_ENV_QWEN3" # Set to EHRSHOT_ENV_QWEN3 for Qwen3, EHRSHOT_EN
 source activate $EHRSHOT_ENV
 
 # Paths
-EXPERIMENT_IDENTIFIER="full_run" # _w_dates
+EXPERIMENT_IDENTIFIER="full_run_list"
 BASE_DIR="/home/sthe14/ehrshot-benchmark"
 SCRIPT_DIR="$BASE_DIR/ehrshot"
-INSTRUCTIONS_FILE="${BASE_DIR}/ehrshot/serialization/task_to_instructions.json"
 # INSTRUCTIONS_FILE="${BASE_DIR}/ehrshot/serialization/task_to_instructions_list.json"
+
 # INSTRUCTIONS_FILE="${BASE_DIR}/ehrshot/serialization/task_to_instructions_list_w_time.json"
+# INSTRUCTIONS_FILE="${BASE_DIR}/ehrshot/serialization/task_to_instructions.json"
 # NOTE: Set to experiment path --> only LLM
 # NOTE: Set to final_exp path --> LR and CLIMBR as well
 EXPERIMENTS_DIR="$BASE_DIR/EHRSHOT_ASSETS/experiments/$EXPERIMENT_IDENTIFIER"
@@ -92,7 +93,7 @@ text_encoders=(
 # )
 
 # Selected serialization and settings
-serialization_strategies=("unique_then_list_visits_wo_allconds_w_values")
+serialization_strategies=("unique_events_list_recent_8k")
 
 # Fixed options
 instructions_options=("true")
