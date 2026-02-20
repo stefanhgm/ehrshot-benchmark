@@ -1,7 +1,6 @@
 import argparse
 import pickle
 import os
-import time
 from loguru import logger
 from utils import check_file_existence_and_handle_force_refresh
 from typing import Dict, List, Tuple
@@ -10,6 +9,7 @@ import numpy as np
 # from serialization.text_encoder import LLM2VecLlama2_Sheared_1_3B_SupervisedEncoder, LLM2VecLlama3_1_7B_InstructSupervisedEncoder, LLM2VecLlama3_1_7B_InstructSupervisedChunkedEncoder
 from serialization.text_encoder import TextEncoder,  GTEQwen2_7B_InstructEncoder, GTEQwen2_1_5B_InstructEncoder, STGTELargeENv15Encoder, BertEncoder, GTEQwen2_7B_InstructChunkedEncoder, Qwen3Embedding_8B_Encoder, Qwen3Embedding_4B_Encoder, Qwen3Embedding_0_6B_Encoder
 from serialization.ehr_serializer import UniqueThenListVisitsStrategy, UniqueThenListVisitsWithValuesStrategy, UniqueThenListVisitsWOAllCondsStrategy, UniqueThenListVisitsWOAllCondsWithValuesStrategy, UniqueThenListVisitsWOAllCondsWithValuesJSONStrategy, UniqueThenListVisitsWOAllCondsWithValuesXMLStrategy, UniqueThenListVisitsWOAllCondsWithValuesYAMLStrategy, UniqueEventsListStrategy, UniqueEventsListWithTimeStrategy, UniqueEventsListRecentStrategy, UniqueEventsListRecentWithTimeStrategy 
+from serialization.ehr_simple_serializer import UniqueCodesListRecentStrategy, UniqueCodesListRecentWithTimeStrategy, UniqueCodesListStrategy, UniqueCodesListWithTimeStrategy
 from datetime import datetime, timedelta
 from llm_featurizer import LLMFeaturizer, preprocess_llm_featurizer, featurize_llm_featurizer, load_labeled_patients_with_tasks
 import json
@@ -42,11 +42,12 @@ if __name__ == "__main__":
     EXCLUDED_ONTOLOGIES: List[str] = ['LOINC', 'Domain', 'CARE_SITE', 'ICDO3'] if args.excluded_ontologies == 'no_labs' else \
         ['LOINC', 'Domain', 'CARE_SITE', 'ICDO3', 'RxNorm', 'RxNorm Extension'] if args.excluded_ontologies == 'no_labs_meds' else \
         ['LOINC', 'Domain', 'CARE_SITE', 'ICDO3', 'Medicare Specialty', 'CMS Place of Service', 'OMOP Extension', 'Condition Type'] if args.excluded_ontologies == 'no_labs_single' else \
-        ['LOINC', 'Domain', 'CARE_SITE', 'ICDO3', 'RxNorm', 'RxNorm Extension', 'Medicare Specialty', 'CMS Place of Service', 'OMOP Extension', 'Condition Type']  if args.excluded_ontologies == 'no_labs_meds_single' else []
+        ['LOINC', 'Domain', 'CARE_SITE', 'ICDO3', 'RxNorm', 'RxNorm Extension', 'Medicare Specialty', 'CMS Place of Service', 'OMOP Extension', 'Condition Type']  if args.excluded_ontologies == 'no_labs_meds_single' else \
+        ['CARE_SITE', 'ICDO3'] if args.excluded_ontologies == 'no_unres' else []
     NUM_AGGREGATED_EVENTS: int = args.num_aggregated  # Default: 0
     FILTER_AGGREGATED_EVENTS: bool = NUM_AGGREGATED_EVENTS > 0
     # No aggregated events for list strategies
-    if args.serialization_strategy.startswith('unique_events_list_'):
+    if args.serialization_strategy.startswith('unique_events_list_') or args.serialization_strategy.startswith('unique_codes_list_'):
         NUM_AGGREGATED_EVENTS = 0
         FILTER_AGGREGATED_EVENTS = False
         logger.info(f"For serialization strategy `{args.serialization_strategy}` enforce NUM_AGGREGATED_EVENTS={NUM_AGGREGATED_EVENTS}, FILTER_AGGREGATED_EVENTS={FILTER_AGGREGATED_EVENTS}")
@@ -99,6 +100,14 @@ if __name__ == "__main__":
         'unique_events_list_w_time_8k': (UniqueEventsListWithTimeStrategy, 8192), 
         'unique_events_list_recent_8k': (UniqueEventsListRecentStrategy, 8192), 
         'unique_events_list_recent_w_time_8k': (UniqueEventsListRecentWithTimeStrategy, 8192), 
+        'unique_codes_list_w_time_8k': (UniqueCodesListWithTimeStrategy, 8192), 
+        'unique_codes_list_8k': (UniqueCodesListStrategy, 8192), 
+        'unique_codes_list_recent_w_time_8k': (UniqueCodesListRecentWithTimeStrategy, 8192), 
+        'unique_codes_list_recent_8k': (UniqueCodesListRecentStrategy, 8192), 
+        'unique_codes_list_recent_4k': (UniqueCodesListRecentStrategy, 4096), 
+        'unique_codes_list_recent_2k': (UniqueCodesListRecentStrategy, 2048), 
+        'unique_codes_list_recent_1k': (UniqueCodesListRecentStrategy, 1024), 
+        'unique_codes_list_recent_512': (UniqueCodesListRecentStrategy, 512), 
     }
 
     # Determine serialization strategy and max input length

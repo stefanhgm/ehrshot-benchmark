@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 import numpy as np
 import pandas as pd
 import re
-from serialization.ehr_serializer import EHRSerializer
+from serialization.ehr_simple_serializer import SerializationSimpleStrategy
 from femr import Event
 from serialization.text_encoder import TextEncoder
 from femr import Patient
@@ -14,11 +14,11 @@ from nptyping import NDArray
 from dataclasses import dataclass
 import csv
 import collections
-import itertools
 import multiprocessing
 from femr.labelers import Label
 from femr.extension import datasets as extension_datasets
 from serialization.ehr_serializer import SerializationStrategy, AGGREGATED_EVENTS_CODES_LOINC
+from serialization.ehr_serializer_factory import make_serializer_for_strategy
 
 PatientDatabase = extension_datasets.PatientDatabase
 Ontology = extension_datasets.Ontology
@@ -65,14 +65,13 @@ def _get_cache_folder_and_fingerprint(
     patients_to_labels: Dict[int, List[Tuple[datetime, str]]]
 ) -> Tuple[str, str]:
     
-    # For cache folder name combine: serialization_strategy, task_to_instructions not {}, excluded_ontologies, add_condition_parent_concepts
+    # For cache folder name combine: serialization_strategy, task_to_instructions not {}, excluded_ontologies
     cache_folder_name = [
         len(patients_to_labels),
         sum([len(labels) for labels in patients_to_labels.values()]),
         llm_featurizer.serialization_strategy,
         'instr-' + str(llm_featurizer.task_to_instructions != {}),
-        'eo-' + '-'.join(llm_featurizer.excluded_ontologies),
-        'apc-' + str(llm_featurizer.add_condition_parent_concepts)
+        'eo-' + '-'.join(llm_featurizer.excluded_ontologies)
     ]
     cache_folder_name = '_'.join(cache_folder_name)
     # Create caching fingerprint with hash over patients_to_labels
@@ -205,7 +204,6 @@ class LLMFeaturizer():
         task_to_instructions: Optional[Dict[str, str]] = {},
         excluded_ontologies: List[str] = [],
         filter_aggregated_events: bool = False,
-        add_condition_parent_concepts: Optional[bool] = False,
         time_window: Optional[timedelta] = None,
     ):
         self.embedding_dim = embedding_size
@@ -213,7 +211,6 @@ class LLMFeaturizer():
         self.task_to_instructions = task_to_instructions
         self.excluded_ontologies = excluded_ontologies
         self.filter_aggregated_events = filter_aggregated_events
-        self.add_condition_parent_concepts = add_condition_parent_concepts
         self.time_window = time_window
 
         # Filled during preprocessing
@@ -246,9 +243,12 @@ class LLMFeaturizer():
         self.custom_ontologies = custom_ontologies
         self.re_custom_ontologies = re.compile(r"^(" + "|".join(custom_ontologies.keys()) + r")\/")
 
-        # Remove some non-informative semantic codes / descriptions
-        exclude_description_prefixes = ['Birth']
-        self.re_exclude_description_prefixes = None if exclude_description_prefixes == [] else re.compile(r"^(" + "|".join(exclude_description_prefixes) + ")")
+        # For non simple strategies remove Birth because Patient age: is used instead
+        self.re_exclude_description_prefixes = None
+        if not isinstance(self.serialization_strategy, SerializationSimpleStrategy):
+            # Non simple serializer case -> Manually change age event - according to featurizer.get_patient_birthdate always first event
+            exclude_description_prefixes = ['Birth']
+            self.re_exclude_description_prefixes = re.compile(r"^(" + "|".join(exclude_description_prefixes) + ")")
     
     def get_num_columns(self) -> int:
         return self.embedding_dim
@@ -262,8 +262,7 @@ class LLMFeaturizer():
         
         ontology_name = code.split('/')[0].strip()
             
-        # Ignore excluded ontologies
-        # Manually include aggregated events for LOINC
+        # Ignore excluded ontologies - manually include aggregated events (e.g. LOINC) if they exist
         if (ontology_name in self.excluded_ontologies and code not in AGGREGATED_EVENTS_CODES_LOINC) and (ontology_name not in included_ontologies):
             return None
                 
@@ -332,31 +331,19 @@ class LLMFeaturizer():
             # According to existing feature processing, all events before or at the label time are included
             # Manually checked two examples for anemia and hypoglycemia: label.time one minute before actual value
             events_until_label = [event for event in patient.events if event.start <= label.time]
-            
-            if self.time_window is not None:
-                # Keep demographics even though coded at birth
-                keep_first_num_events = 3
-                if len(events_until_label) > 3 and events_until_label[3].code.split('/')[0] in ['Race', 'Gender', 'Ethnicity']:
-                    keep_first_num_events = 4
-                events_until_label = events_until_label[0:keep_first_num_events] + [event for event in events_until_label if label.time - event.start <= self.time_window]
                 
-            if self.add_condition_parent_concepts:
-                # Add all direct parents of conditions (omop_table=condition_occurrence)
-                events_until_label = [self._create_conditions_parent_events(event, ontology.get_parents(event.code)) for event in events_until_label]
-                events_until_label = list(itertools.chain(*events_until_label))
+            serializer = make_serializer_for_strategy(self.serialization_strategy)
             
-            # Manually change age event - according to featurizer.get_patient_birthdate always first event
-            patient_birth_date: datetime = get_patient_birthdate(patient)
-            age = int((label.time - patient_birth_date).days / 365)
-            if len(events_until_label) > 0:
-                birth_event = events_until_label[0]
-                custom_age_code = f"{age_identifier}: {age}"
-                events_until_label[0] = Event(birth_event.start, custom_age_code, birth_event.value)
+            if not isinstance(self.serialization_strategy, SerializationSimpleStrategy):
+                # Non simple serializer case -> Manually change age event - according to featurizer.get_patient_birthdate always first event
+                patient_birth_date: datetime = get_patient_birthdate(patient)
+                age = int((label.time - patient_birth_date).days / 365)
+                if len(events_until_label) > 0:
+                    birth_event = events_until_label[0]
+                    custom_age_code = f"{age_identifier}: {age}"
+                    events_until_label[0] = Event(birth_event.start, custom_age_code, birth_event.value)
             
-            serializer = EHRSerializer()
             serializer.load_from_femr_events(events_until_label, resolve_code, is_visit_event, self.filter_aggregated_events)
-            
-            # text = serialize_unique_codes([event for event in patient.events if event.start <= label.time])
             text = serializer.serialize(self.serialization_strategy, label_time=label.time)
         
             # Get instruction

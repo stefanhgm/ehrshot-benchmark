@@ -3,8 +3,11 @@ num_threads=40
 EHRSHOT_ENV="EHRSHOT_ENV_QWEN3" # Set to EHRSHOT_ENV_QWEN3 for Qwen3, EHRSHOT_ENV for Llama3 and GteQwen2
 source activate $EHRSHOT_ENV
 
+# Fix libnotify issue
+export LD_PRELOAD="$CONDA_PREFIX/lib/libittnotify.so"
+
 # Paths
-EXPERIMENT_IDENTIFIER="full_run_list"
+EXPERIMENT_IDENTIFIER="full_run_codes_list"
 BASE_DIR="/home/sthe14/ehrshot-benchmark"
 SCRIPT_DIR="$BASE_DIR/ehrshot"
 INSTRUCTIONS_FILE="${BASE_DIR}/ehrshot/serialization/task_to_instructions_list.json"
@@ -41,18 +44,23 @@ text_encoders=(
     # "deberta_v3_large"
     # "bert_base"
     # "bert_large"
-    # "modernbert_base"
-    # "modernbert_large"
 )
+
 # serialization_strategies=(
-#     "list_events",
-#     "list_visits_with_events",
-#     "list_visits_with_events_detailed_aggr"
-#     "unique_then_list_visits_wo_allconds_w_values"
-#     "unique_then_list_visits_wo_allconds_w_values_4k"
-#     "unique_then_list_visits_wo_allconds_w_values_2k"
-#     "unique_then_list_visits_wo_allconds_w_values_1k"
-#     "unique_then_list_visits_wo_allconds_w_values_512"
+#     "unique_codes_list_recent_8k"
+#     "unique_codes_list_recent_4k"
+#     "unique_codes_list_recent_2k"
+#     "unique_codes_list_recent_1k"
+#     "unique_codes_list_recent_512"
+#     "unique_codes_list_w_time_8k"
+#     "unique_codes_list_8k"
+#     "unique_codes_list_recent_w_time_8k"
+
+#     "unique_then_list_visits_wo_allconds_w_values",
+#     "unique_then_list_visits_wo_allconds_w_values_8k_json"
+#     "unique_then_list_visits_wo_allconds_w_values_8k_json"
+#     "unique_then_list_visits_wo_allconds_w_values_8k_xml"
+#     "unique_then_list_visits_wo_allconds_w_values_8k_yaml"
 
 #     Ablations removing EHR serialization parts
 #     "unique_then_list_visits_wo_allconds_w_values_4k_neutral"
@@ -78,29 +86,14 @@ text_encoders=(
 #     "unique_then_list_visits_wo_allconds_w_values_4k_only_visits_only_conditions"
 #     "unique_then_list_visits_wo_allconds_w_values_4k_only_visits_only_medications"
 #     "unique_then_list_visits_wo_allconds_w_values_4k_only_visits_only_procedures"
-
-#     "unique_then_list_visits_wo_allconds"
-#     "unique_then_list_visits_wo_allconds_4k"
-#     "unique_then_list_visits_w_values"
-#     "unique_then_list_visits_w_values_4k"
-#     "unique_then_list_visits"
-#     "unique_then_list_visits_4k"
-
-#     "unique_then_list_visits_wo_allconds_w_values_8k_json"
-#     "unique_then_list_visits_wo_allconds_w_values_8k_xml"
-#     "unique_then_list_visits_wo_allconds_w_values_8k_yaml"
-#     "unique_events_list_8k"
-#     "unique_events_list_w_time_8k"
-#     "unique_events_list_recent_8k"
-#     "unique_events_list_recent_w_time_8k"
 # )
 
 # Selected serialization and settings
-serialization_strategies=("unique_events_list_recent_8k")
+serialization_strategies=("unique_codes_list_recent_8k")
 
 # Fixed options
 instructions_options=("true")
-excluded_ontologies=("no_labs_single")
+excluded_ontologies=("no_unres")
 num_aggregated=(3)
 time_window_days=(0)
 # time_window_days=(1 7 30 365 1095)

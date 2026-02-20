@@ -321,7 +321,7 @@ class GTEQwen2_7B_InstructChunkedEncoder(GTEQwen2_7B_InstructEncoder):
         
     def _encode(self, inputs: List, **kwargs) -> NDArray[Any]:
         # Use multiples of this base input length to determine the max number of chunks, e.g. for 2k chunks use max number of 2
-        BASE_INPUT_LENGTH = 4096
+        BASE_INPUT_LENGTH = 8192
         max_chunks = BASE_INPUT_LENGTH // self.max_input_length
         # To save memory, shorten texts to BASE_INPUT_LENGTH * 8 characters as a very loose upper bound for the number of tokens
         inputs = [text[:BASE_INPUT_LENGTH * 8] for text in inputs]
@@ -429,8 +429,8 @@ class BertEncoder(BERTLLMEncoder):
             self.model = torch.nn.DataParallel(self.model)
 
     def _encode(self, inputs: List, **kwargs) -> NDArray[Any]:
-        # Use multiples of this base input length to determine the max number of chunks, e.g. for 2k chunks use max number of 2
-        BASE_INPUT_LENGTH = 4096
+        # Use multiples of this base input length to determine the max number of chunks, e.g. for 2k chunks use max number of 4
+        BASE_INPUT_LENGTH = 8192
         max_chunks = BASE_INPUT_LENGTH // self.max_input_length
         # To save memory, shorten texts to BASE_INPUT_LENGTH * 8 characters as a very loose upper bound for the number of tokens
         inputs = [text[:BASE_INPUT_LENGTH * 8] for text in inputs]

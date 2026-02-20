@@ -44,6 +44,23 @@
         },
 
         {
+            "name": "Python Debugger: 4 Generate Count Features",
+            "type": "debugpy",
+            "request": "launch",
+            "justMyCode": false,
+            "program": "${workspaceFolder}/ehrshot/4_generate_count_features.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--path_to_database", "~/ehrshot-benchmark/EHRSHOT_ASSETS/femr/extract",
+                "--path_to_labels_dir", "~/ehrshot-benchmark/EHRSHOT_ASSETS/benchmark",
+                "--path_to_features_dir", "~/ehrshot-benchmark/EHRSHOT_ASSETS/features",
+                "--num_threads", "20",
+                "--is_force_refresh"
+            ],
+
+        },
+
+        {
             "name": "Python Debugger: 4 Generate LLM Features",
             "type": "debugpy",
             "request": "launch",
@@ -66,33 +83,15 @@
                 // "--text_encoder", "llm2vec_llama3_1_7b_instruct_supervised_chunked_512",
                 // "--text_encoder", "qwen3_embedding_8b",
                 // "--text_encoder", "qwen3_embedding_0_6b",
-                "--task_to_instructions", "~/ehrshot-benchmark/ehrshot/serialization/task_to_instructions.json",
+                "--task_to_instructions", "~/ehrshot-benchmark/ehrshot/serialization/task_to_instructions_list.json",
                 // "--task_to_instructions", "",
-                // "--serialization_strategy", "unique_then_list_visits_wo_allconds_w_values_4k_no_demographics",
-                // "--serialization_strategy", "unique_then_list_visits_wo_allconds_w_values_4k_no_aggregated_events",
-                // "--serialization_strategy", "unique_then_list_visits_wo_allconds_w_values_4k_no_aggregated_body_metrics",
-                // "--serialization_strategy", "unique_then_list_visits_wo_allconds_w_values_4k_no_aggregated_vital_signs",
-                // "--serialization_strategy", "unique_then_list_visits_wo_allconds_w_values_4k_no_aggregated_lab_results",
-                // "--serialization_strategy", "unique_then_list_visits_wo_allconds_w_values_4k_no_visits",
-                // "--serialization_strategy", "unique_then_list_visits_wo_allconds_w_values_4k_no_conditions",
-                // "--serialization_strategy", "unique_then_list_visits_wo_allconds_w_values_4k_no_medications",
-                // "--serialization_strategy", "unique_then_list_visits_wo_allconds_w_values_4k_no_procedures",
-                // "--serialization_strategy", "unique_then_list_visits_wo_allconds_w_values_4k_only_demographics",
-                // "--serialization_strategy", "unique_then_list_visits_wo_allconds_w_values_4k_only_aggregated_events_only_aggregated_body_metrics_only_aggregated_vital_signs_only_aggregated_lab_results",
-                // "--serialization_strategy", "unique_then_list_visits_wo_allconds_w_values_4k_only_aggregated_events_only_aggregated_body_metrics",
-                // "--serialization_strategy", "unique_then_list_visits_wo_allconds_w_values_4k_only_aggregated_events_only_aggregated_vital_signs",
-                // "--serialization_strategy", "unique_then_list_visits_wo_allconds_w_values_4k_only_aggregated_events_only_aggregated_lab_results",
-                // "--serialization_strategy", "unique_then_list_visits_wo_allconds_w_values_4k_only_visits",  
-                // "--serialization_strategy", "unique_then_list_visits_wo_allconds_w_values_4k_only_visits_only_conditions_only_medications_only_procedures",   
-                // "--serialization_strategy", "unique_then_list_visits_wo_allconds_w_values_4k_only_visits_only_conditions",
-                // "--serialization_strategy", "unique_then_list_visits_wo_allconds_w_values_4k_only_visits_only_medications",
-                // "--serialization_strategy", "unique_then_list_visits_wo_allconds_w_values_4k_only_visits_only_procedures",
-                // "--serialization_strategy", "unique_then_list_visits_wo_allconds_w_values_512",
-                // "--serialization_strategy", "unique_then_list_visits_wo_allconds_w_values_4k",  // "unique_then_list_visits_wo_allconds_w_values_4k"
-                // "--serialization_strategy", "unique_then_list_visits_wo_allconds_w_values_8k_yaml",
                 // "--serialization_strategy", "unique_then_list_visits_wo_allconds_w_values",
-                "--serialization_strategy", "unique_events_list_recent_w_time_8k",
-                "--excluded_ontologies", "no_labs_single",
+                // "--serialization_strategy", "unique_events_list_recent_8k",
+                // "--serialization_strategy", "unique_events_list_recent_w_time_8k",
+                // "--excluded_ontologies", "no_labs_single",
+                "--serialization_strategy", "unique_codes_list_recent_8k",
+                // "--serialization_strategy", "unique_codes_list_recent_w_time_8k",
+                "--excluded_ontologies", "no_unres",
                 "--num_aggregated", "3",
                 "--time_window_days", "0",
             ],
@@ -111,7 +110,7 @@
                 "--path_to_features_dir", "~/ehrshot-benchmark/EHRSHOT_ASSETS/features",
                 "--path_to_output_dir", "~/ehrshot-benchmark/EHRSHOT_ASSETS/results",
                 "--path_to_split_csv", "~/ehrshot-benchmark/EHRSHOT_ASSETS/splits/person_id_map.csv",
-                "--labeling_function", "guo_los",
+                "--labeling_function", "full",
                 "--shot_strat", "all",
                 "--num_threads", "1"
             ]
@@ -170,9 +169,13 @@
                 // Combine baseline with qwen3
                 "--first_source_dir", "~/ehrshot-benchmark/EHRSHOT_ASSETS_BASELINES/results_complete",
                 "--first_source_filter", "count,gbm;clmbr,lr_lbfgs",
-                "--second_source_dir", "/home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run/qwen3_embedding_8b_unique_then_list_visits_wo_allconds_w_values_no_labs_single_3_0_full",
+                // "--second_source_dir", "/home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run/qwen3_embedding_8b_unique_then_list_visits_wo_allconds_w_values_no_labs_single_3_0_full",
+                // "--second_source_dir", "/home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/rerun_list/qwen3_embedding_8b_unique_events_list_recent_8k_no_labs_single_3_0_full/",
+                "--second_source_dir", "/home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run_list/qwen3_embedding_8b_unique_events_list_recent_8k_no_labs_single_3_0_full",
                 "--second_source_filter", "llm,lr_lbfgs",
-                "--output_dir", "/home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run/qwen3_embedding_8b_unique_then_list_visits_wo_allconds_w_values_no_labs_single_3_0_full_with_baselines"
+                // "--output_dir", "/home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run/qwen3_embedding_8b_unique_then_list_visits_wo_allconds_w_values_no_labs_single_3_0_full_with_baselines"
+                // "--output_dir", "/home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/rerun_list/qwen3_embedding_8b_unique_events_list_recent_8k_no_labs_single_3_0_full_with_baselines"
+                "--output_dir", "/home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run_list/qwen3_embedding_8b_unique_events_list_recent_8k_no_labs_single_3_0_full_with_baselines"
             ]
         },
 
