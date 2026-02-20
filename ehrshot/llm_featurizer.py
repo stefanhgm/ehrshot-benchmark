@@ -331,6 +331,10 @@ class LLMFeaturizer():
             # According to existing feature processing, all events before or at the label time are included
             # Manually checked two examples for anemia and hypoglycemia: label.time one minute before actual value
             events_until_label = [event for event in patient.events if event.start <= label.time]
+
+            # If time_window is set, only include events within time_window before label.time
+            if self.time_window is not None:
+                events_until_label = [event for event in events_until_label if event.start >= label.time - self.time_window]
                 
             serializer = make_serializer_for_strategy(self.serialization_strategy)
             
