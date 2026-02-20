@@ -62,7 +62,7 @@ def run_evaluation(X_train: np.ndarray,
                     y_test: np.ndarray, 
                     model_head: str, 
                     n_jobs: int = 1,
-                    test_patient_ids: np.ndarray = None) -> Tuple[Any, Dict[str, float]]:
+                    test_patient_ids: np.ndarray = None) -> Tuple[Any, Dict[str, float], np.ndarray]:
     logger.critical(f"Start | Training {model_head}")
     logger.info(f"Train shape: X = {X_train.shape}, Y = {y_train.shape}")
     logger.info(f"Val shape: X = {X_val.shape}, Y = {y_val.shape}")
@@ -165,7 +165,7 @@ def run_evaluation(X_train: np.ndarray,
         scores[metric]['mean'] = np.mean(score_list)
         scores[metric]['upper'] = upper
 
-    return model, scores
+    return model, scores, y_test_proba
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run EHRSHOT evaluation benchmark on a specific task.")
@@ -195,6 +195,7 @@ if __name__ == "__main__":
     PATH_TO_SHOTS: str = os.path.join(PATH_TO_LABELS_DIR, LABELING_FUNCTION, f"{SHOT_STRAT}_shots_data.json")
     PATH_TO_OUTPUT_DIR: str = args.path_to_output_dir
     PATH_TO_OUTPUT_FILE: str = os.path.join(PATH_TO_OUTPUT_DIR, LABELING_FUNCTION, f'{SHOT_STRAT}_results.csv')
+    PATH_TO_PROBA_OUTPUT_FILE: str = os.path.join(PATH_TO_OUTPUT_DIR, LABELING_FUNCTION, f'{SHOT_STRAT}_probas.csv')
     os.makedirs(os.path.dirname(PATH_TO_OUTPUT_FILE), exist_ok=True)
     
     # If results already exist, then append new results to existing file
@@ -230,6 +231,7 @@ if __name__ == "__main__":
     # Results will be stored as a CSV with columns:
     #   sub_task, model, head, replicate, score_name, score_value, k
     results: List[Dict[str, Any]] = []
+    probas: List[Dict[str, Any]] = []
     
     # For each base model we are evaluating...
     for model in MODEL_2_INFO.keys():
@@ -296,7 +298,23 @@ if __name__ == "__main__":
                             y_test_k = y_test[:, sub_task_idx]
 
                         # Fit model with hyperparameter tuning
-                        best_model, scores = run_evaluation(X_train_k, X_val_k, X_test, y_train_k, y_val_k, y_test_k, model_head=head, n_jobs=NUM_THREADS, test_patient_ids=test_patient_ids)
+                        best_model, scores, y_test_proba = run_evaluation(
+                            X_train_k, X_val_k, X_test, y_train_k, y_val_k, y_test_k,
+                            model_head=head, n_jobs=NUM_THREADS, test_patient_ids=test_patient_ids
+                        )
+
+                        # Save probabilities (test set)
+                        for pid, lbl, proba in zip(test_patient_ids, y_test_k, y_test_proba):
+                            probas.append({
+                                'patient_id': pid,
+                                'sub_task': sub_task,
+                                'model': model,
+                                'head': head,
+                                'replicate': replicate,
+                                'k': k,
+                                'label': lbl,
+                                'proba': proba,
+                            })
 
                         # Save results
                         for score_name, score_value in scores.items():
@@ -320,3 +338,8 @@ if __name__ == "__main__":
     logger.info(f"Added {df.shape[0] - (df_existing.shape[0] if df_existing is not None else 0)} rows")
     df.to_csv(PATH_TO_OUTPUT_FILE)
     logger.success("Done!")
+
+    logger.info(f"Saving probabilities to: {PATH_TO_PROBA_OUTPUT_FILE}")
+    df_proba: pd.DataFrame = pd.DataFrame(probas, columns=['patient_id','sub_task','model','head','replicate','k','label','proba'])
+    df_proba.to_csv(PATH_TO_PROBA_OUTPUT_FILE, index=False)
+    logger.success("Done saving probabilities!")
