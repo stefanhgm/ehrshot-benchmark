@@ -143,8 +143,6 @@ class LLM2VecLLMEncoder(LLMEncoder):
         
     def add_instruction(self, instruction: str, text: str) -> Any:
         def llm2vec_instruction(instruction):
-            if len(instruction) > 0 and instruction[-1] != ":":
-                instruction = instruction.strip(".") + ":"
             return instruction
         return [llm2vec_instruction(instruction), text]
     
