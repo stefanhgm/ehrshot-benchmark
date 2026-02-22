@@ -58,7 +58,6 @@ text_encoders=(
 
 #     "unique_then_list_visits_wo_allconds_w_values",
 #     "unique_then_list_visits_wo_allconds_w_values_8k_json"
-#     "unique_then_list_visits_wo_allconds_w_values_8k_json"
 #     "unique_then_list_visits_wo_allconds_w_values_8k_xml"
 #     "unique_then_list_visits_wo_allconds_w_values_8k_yaml"
 
@@ -96,7 +95,7 @@ instructions_options=("true")
 excluded_ontologies=("no_unres")
 num_aggregated=(3)
 time_window_days=(0)
-# time_window_days=(1 7 30 365 1095)
+# time_window_days=(-1 1 7 30 365 1095)
 
 # Labels = Dataset subset
 DATASET="full"
