@@ -10,11 +10,11 @@
 #   - DGX A100 80GB:   s-sc-dgx01, s-sc-dgx02
 #   - H100 80GB:       s-sc-pgpu08
 #   - H200 141GB:      s-sc-pgpu11–15   (FASTEST, recommended)
-# SBATCH --partition=pgpu
-# SBATCH --gres=gpu:8
-# SBATCH --mem=800G
-# SBATCH --exclusive
-## SBATCH --exclude=s-sc-dgx[01-02]
+#SBATCH --partition=pgpu
+#SBATCH --gres=gpu:8
+#SBATCH --mem=800G
+#SBATCH --exclusive
+##SBATCH --exclude=s-sc-dgx[01-02]
 
 # PGPU resources: 
 ##SBATCH --partition=pgpu
