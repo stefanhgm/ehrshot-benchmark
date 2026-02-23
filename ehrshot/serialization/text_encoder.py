@@ -425,11 +425,18 @@ class BertEncoder(BERTLLMEncoder):
         super().__init__(embedding_size=embedding_size, model_max_input_length=model_max_input_length, max_input_length=max_input_length)  
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.tokenizer = AutoTokenizer.from_pretrained(bert_identifier)
-        self.model = AutoModel.from_pretrained(bert_identifier).to(self.device)
+
+        # Prefer safetensors, but allow fallback to PyTorch bin weights
+        try:
+            self.model = AutoModel.from_pretrained(bert_identifier, use_safetensors=True).to(self.device)
+        except Exception as e_safetensors:
+            print(
+                f"[WARN] Could not load safetensors for '{bert_identifier}'. "
+                f"Falling back to PyTorch weights (.bin). Error was: {e_safetensors}"
+            )
+            self.model = AutoModel.from_pretrained(bert_identifier, use_safetensors=False,).to(self.device)
 
         # Enable multi-gpu support
-        self.model = AutoModel.from_pretrained(bert_identifier).to(self.device)
-        
         if torch.cuda.device_count() > 1:
             print(f"Using {torch.cuda.device_count()} GPUs.")
             self.model = torch.nn.DataParallel(self.model)
