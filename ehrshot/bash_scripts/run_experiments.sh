@@ -1,10 +1,12 @@
 # Options
 num_threads=48
 EHRSHOT_ENV="EHRSHOT_ENV_QWEN3" # Set to EHRSHOT_ENV_QWEN3 for Qwen3, EHRSHOT_ENV for Llama3 and GteQwen2
-source activate $EHRSHOT_ENV
+# Make conda activate work in non-interactive shells
+eval "$(/opt/miniforge/condabin/conda shell.bash hook)"
+conda activate "$EHRSHOT_ENV"
 
 # Fix libnotify issue
-export LD_PRELOAD="$CONDA_PREFIX/lib/libittnotify.so"
+# export LD_PRELOAD="$CONDA_PREFIX/lib/libittnotify.so"
 
 # Paths
 EXPERIMENT_IDENTIFIER="full_run_codes_list"
