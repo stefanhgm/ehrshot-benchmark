@@ -7,20 +7,30 @@
 
 # 8-GPU setups (pgpu partition)
 # Available node types:
-#   - DGX A100 80GB:   s-sc-dgx01, s-sc-dgx02
-#   - H100 80GB:       s-sc-pgpu08
-#   - H200 141GB:      s-sc-pgpu11–15   (FASTEST, recommended)
+#   - DGX A100 80GB (128 cpus, 2TB):  s-sc-dgx01, s-sc-dgx02
+#   - H100 80GB (96 cpus, 2TB):       s-sc-pgpu08
+#   - H200 141GB (96 cpus, 2TB):      s-sc-pgpu11–15
 #SBATCH --partition=pgpu
 #SBATCH --gres=gpu:8
-#SBATCH --mem=800G
+#SBATCH --cpus-per-task=96
+#SBATCH --mem=1000G
 #SBATCH --exclusive
-##SBATCH --exclude=s-sc-dgx[01-02]
+# Only H200
+##SBATCH --exclude=s-sc-dgx01,s-sc-dgx02,s-sc-pgpu08
+# Only DGX A100
+##SBATCH --exclude=s-sc-pgpu08,s-sc-pgpu11,s-sc-pgpu12,s-sc-pgpu13,s-sc-pgpu14,s-sc-pgpu15
 
-# PGPU resources: 
+# 4-GPU setups (pgpu partition)
+# Available node types:
+#   - A100 SXM4 40GB (128 cpus, 493GB):  s-sc-pgpu01, s-sc-pgpu02
+#   - A100 SXM4 80GB (128 cpus, 493GB):  s-sc-pgpu03, s-sc-pgpu04, s-sc-pgpu05, s-sc-pgpu06, s-sc-pgpu07
 ##SBATCH --partition=pgpu
 ##SBATCH --gres=gpu:4
+##SBATCH --cpus-per-task=128
 ##SBATCH --mem=480G
-##SBATCH --exclude=s-sc-pgpu03,s-sc-pgpu04
+##SBATCH --exclusive
+# Only 80GB and no nodes with prior runtime errors (03,04)
+##SBATCH --exclude=s-sc-pgpu01,s-sc-pgpu02,s-sc-pgpu03,s-sc-pgpu04
 
 # GPU resources: 
 ##SBATCH --partition=gpu
@@ -28,7 +38,7 @@
 ##SBATCH --mem=480GB
 
 # CPU
-# --partition=compute
+##SBATCH --partition=compute
 
 # Disable Python output buffering
 export PYTHONUNBUFFERED=1
