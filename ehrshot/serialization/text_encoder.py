@@ -266,12 +266,16 @@ class GTEQwen2_7B_InstructEncoder(Qwen2LLMEncoder):
         super().__init__(embedding_size=3584, model_max_input_length=128000, max_input_length=max_input_length) 
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.tokenizer = AutoTokenizer.from_pretrained('Alibaba-NLP/gte-Qwen2-7B-instruct', trust_remote_code=True)  # padding_side='left' by default
-        self.model = AutoModel.from_pretrained('Alibaba-NLP/gte-Qwen2-7B-instruct', trust_remote_code=True, torch_dtype=torch.float16).to(self.device)  
- 
+        self.model = AutoModel.from_pretrained('Alibaba-NLP/gte-Qwen2-7B-instruct', trust_remote_code=True, torch_dtype=torch.float16).to(self.device)
+        # ---- FIX: disable KV cache to avoid from_legacy_cache(past_key_values=None) ----
+        self.model.config.use_cache = False
+
         # Enable multi-gpu support
         if torch.cuda.device_count() > 1:
             print(f"Using {torch.cuda.device_count()} GPUs.")
             self.model = torch.nn.DataParallel(self.model)
+            # ---- FIX (DP): also disable cache on the wrapped module ----
+            self.model.module.config.use_cache = False
 
 # class LLM2VecLlama3_1_7B_InstructSupervisedChunkedEncoder(LLM2VecLlama3_1_7B_InstructSupervisedEncoder):
 #     
@@ -344,12 +348,16 @@ class GTEQwen2_1_5B_InstructEncoder(Qwen2LLMEncoder):
         super().__init__(embedding_size=1536, model_max_input_length=128000, max_input_length=max_input_length) 
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.tokenizer = AutoTokenizer.from_pretrained('Alibaba-NLP/gte-Qwen2-1.5B-instruct', trust_remote_code=True)  # padding_side='left' by default
-        self.model = AutoModel.from_pretrained('Alibaba-NLP/gte-Qwen2-1.5B-instruct', trust_remote_code=True, torch_dtype=torch.float16).to(self.device)  
+        self.model = AutoModel.from_pretrained('Alibaba-NLP/gte-Qwen2-1.5B-instruct', trust_remote_code=True, torch_dtype=torch.float16).to(self.device)
+        # ---- FIX: disable KV cache to avoid from_legacy_cache(past_key_values=None) ----
+        self.model.config.use_cache = False
         
         # Enable multi-gpu support
         if torch.cuda.device_count() > 1:
             print(f"Using {torch.cuda.device_count()} GPUs.")
             self.model = torch.nn.DataParallel(self.model)
+            # ---- FIX (DP): also disable cache on the wrapped module ----
+            self.model.module.config.use_cache = False
 
 class Qwen3Embedding_8B_Encoder(Qwen3LLMEncoder):
     
