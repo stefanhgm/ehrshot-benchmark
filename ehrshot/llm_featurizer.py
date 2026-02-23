@@ -346,6 +346,9 @@ class LLMFeaturizer():
                     birth_event = events_until_label[0]
                     custom_age_code = f"{age_identifier}: {age}"
                     events_until_label[0] = Event(birth_event.start, custom_age_code, birth_event.value)
+            else:
+                # For simple serializer provide ontology to resolve parent codes
+                serializer.ontology = ontology
             
             serializer.load_from_femr_events(events_until_label, resolve_code, is_visit_event, self.filter_aggregated_events)
             text = serializer.serialize(self.serialization_strategy, label_time=label.time)

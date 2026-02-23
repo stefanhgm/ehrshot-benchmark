@@ -55,22 +55,20 @@ if __name__ == "__main__":
     TIME_WINDOW: timedelta | None = None if args.time_window_days == 0 else (timedelta(days=args.time_window_days) if args.time_window_days > 0 else timedelta(hours=-args.time_window_days))
 
     # Process serialization ablations for unique_then_list_visits_wo_allconds_w_values_4k
-    ablation_prefix = 'unique_then_list_visits_wo_allconds_w_values_4k_no_'
-    ablation_only_prefix = 'unique_then_list_visits_wo_allconds_w_values_4k_only_'
+    ablation_prefix = 'unique_codes_list_recent_8k_no_'
+    ablation_only_prefix = 'unique_codes_list_recent_8k_only_'
     if args.serialization_strategy.startswith(ablation_prefix):
         ablation_suffix = args.serialization_strategy[len(ablation_prefix):]
         # Process appended ablations
         ablation = [f"no_{component}" for component in ablation_suffix.split('_no_')]
-        args.serialization_strategy = 'unique_then_list_visits_wo_allconds_w_values_4k'
+        args.serialization_strategy = 'unique_codes_list_recent_8k'
     elif args.serialization_strategy.startswith(ablation_only_prefix):
         ablation_suffix = args.serialization_strategy[len(ablation_only_prefix):]
         # Process appended ablations
-        all_parts = ['no_demographics', 'no_aggregated_events',
-                     'no_aggregated_body_metrics', 'no_aggregated_vital_signs', 'no_aggregated_lab_results',
-                     'no_visits', 'no_conditions', 'no_medications', 'no_procedures']
+        all_parts = ['no_demographics', 'no_visits', 'no_conditions', 'no_medications', 'no_procedures', 'no_labs']
         only_parts = [component for component in ablation_suffix.split('_only_')]
         ablation = [part for part in all_parts if part[3:] not in only_parts]
-        args.serialization_strategy = 'unique_then_list_visits_wo_allconds_w_values_4k'
+        args.serialization_strategy = 'unique_codes_list_recent_8k'
     else:
         ablation = []
 
@@ -115,7 +113,7 @@ if __name__ == "__main__":
     if args.serialization_strategy in strategy_map:
         strategy_class, max_input_length = strategy_map[args.serialization_strategy]
         # Process potential ablations
-        if args.serialization_strategy == 'unique_then_list_visits_wo_allconds_w_values_4k':
+        if args.serialization_strategy == 'unique_codes_list_recent_8k':
             serialization_strategy = strategy_class(NUM_AGGREGATED_EVENTS, ablation=ablation)
         else:
             serialization_strategy = strategy_class(NUM_AGGREGATED_EVENTS)

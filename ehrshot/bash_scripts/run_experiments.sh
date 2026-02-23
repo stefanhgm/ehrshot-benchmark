@@ -1,5 +1,5 @@
 # Options
-num_threads=40
+num_threads=48
 EHRSHOT_ENV="EHRSHOT_ENV_QWEN3" # Set to EHRSHOT_ENV_QWEN3 for Qwen3, EHRSHOT_ENV for Llama3 and GteQwen2
 source activate $EHRSHOT_ENV
 
@@ -61,30 +61,22 @@ text_encoders=(
 #     "unique_then_list_visits_wo_allconds_w_values_8k_xml"
 #     "unique_then_list_visits_wo_allconds_w_values_8k_yaml"
 
-#     Ablations removing EHR serialization parts
-#     "unique_then_list_visits_wo_allconds_w_values_4k_neutral"
-#     "unique_then_list_visits_wo_allconds_w_values_4k_no_demographics"
-#     "unique_then_list_visits_wo_allconds_w_values_4k_no_aggregated_events"
-#     "unique_then_list_visits_wo_allconds_w_values_4k_no_aggregated_lab_results"
-#     "unique_then_list_visits_wo_allconds_w_values_4k_no_aggregated_body_metrics"
-#     "unique_then_list_visits_wo_allconds_w_values_4k_no_aggregated_vital_signs"
-#     "unique_then_list_visits_wo_allconds_w_values_4k_no_visits"
-#     "unique_then_list_visits_wo_allconds_w_values_4k_no_conditions"
-#     "unique_then_list_visits_wo_allconds_w_values_4k_no_medications"
-#     "unique_then_list_visits_wo_allconds_w_values_4k_no_procedures"
-
-#     Ablations adding EHR serialization parts
-#     "unique_then_list_visits_wo_allconds_w_values_4k_only_demographics"
-#     "unique_then_list_visits_wo_allconds_w_values_4k_only_aggregated_events_only_aggregated_body_metrics
-#      _only_aggregated_vital_signs_only_aggregated_lab_results"
-#     "unique_then_list_visits_wo_allconds_w_values_4k_only_aggregated_events_only_aggregated_body_metrics"
-#     "unique_then_list_visits_wo_allconds_w_values_4k_only_aggregated_events_only_aggregated_vital_signs"
-#     "unique_then_list_visits_wo_allconds_w_values_4k_only_aggregated_events_only_aggregated_lab_results"
-#     "unique_then_list_visits_wo_allconds_w_values_4k_only_visits"
-#     "unique_then_list_visits_wo_allconds_w_values_4k_only_visits_only_conditions_only_medications_only_procedures"
-#     "unique_then_list_visits_wo_allconds_w_values_4k_only_visits_only_conditions"
-#     "unique_then_list_visits_wo_allconds_w_values_4k_only_visits_only_medications"
-#     "unique_then_list_visits_wo_allconds_w_values_4k_only_visits_only_procedures"
+#     "unique_codes_list_recent_8k_neutral"
+#     # no prompt
+# 
+#     "unique_codes_list_recent_8k_no_demographics"
+#     "unique_codes_list_recent_8k_no_visits"
+#     "unique_codes_list_recent_8k_no_conditions"
+#     "unique_codes_list_recent_8k_no_medications"
+#     "unique_codes_list_recent_8k_no_procedures"
+#     "unique_codes_list_recent_8k_no_labs"
+# 
+#     "unique_codes_list_recent_8k_only_demographics"
+#     "unique_codes_list_recent_8k_only_visits"
+#     "unique_codes_list_recent_8k_only_conditions"
+#     "unique_codes_list_recent_8k_only_medications"
+#     "unique_codes_list_recent_8k_only_procedures"
+#     "unique_codes_list_recent_8k_only_labs"
 # )
 
 # Selected serialization and settings
