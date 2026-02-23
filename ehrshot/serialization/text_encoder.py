@@ -14,6 +14,7 @@ from typing import Tuple
 import hashlib
 import os
 import pickle
+# NOTE: workaround for LLM2Vec models that are not compatible with most recent transformers library for ModernBERT, Qwen3
 # from llm2vec import LLM2Vec
 import torch
 # Workaround for ModernBert
@@ -259,24 +260,7 @@ class LLM2VecLlama2_Sheared_1_3B_SupervisedEncoder(LLM2VecLLMEncoder):
 #             max_length=self.max_input_length,
 #             doc_max_length=self.max_input_length,
 #         )
-
-class GTEQwen2_7B_InstructEncoder(Qwen2LLMEncoder):
-    
-    def __init__(self, max_input_length: int, **kwargs) -> None:
-        super().__init__(embedding_size=3584, model_max_input_length=128000, max_input_length=max_input_length) 
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.tokenizer = AutoTokenizer.from_pretrained('Alibaba-NLP/gte-Qwen2-7B-instruct', trust_remote_code=True)  # padding_side='left' by default
-        self.model = AutoModel.from_pretrained('Alibaba-NLP/gte-Qwen2-7B-instruct', trust_remote_code=True, torch_dtype=torch.float16).to(self.device)
-        # ---- FIX: disable KV cache to avoid from_legacy_cache(past_key_values=None) ----
-        self.model.config.use_cache = False
-
-        # Enable multi-gpu support
-        if torch.cuda.device_count() > 1:
-            print(f"Using {torch.cuda.device_count()} GPUs.")
-            self.model = torch.nn.DataParallel(self.model)
-            # ---- FIX (DP): also disable cache on the wrapped module ----
-            self.model.module.config.use_cache = False
-
+# 
 # class LLM2VecLlama3_1_7B_InstructSupervisedChunkedEncoder(LLM2VecLlama3_1_7B_InstructSupervisedEncoder):
 #     
 #     def __init__(self, max_input_length: int, **kwargs) -> None:
@@ -315,6 +299,22 @@ class GTEQwen2_7B_InstructEncoder(Qwen2LLMEncoder):
 #             
 #         return all_embeddings
 
+class GTEQwen2_7B_InstructEncoder(Qwen2LLMEncoder):
+    
+    def __init__(self, max_input_length: int, **kwargs) -> None:
+        super().__init__(embedding_size=3584, model_max_input_length=128000, max_input_length=max_input_length) 
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.tokenizer = AutoTokenizer.from_pretrained('Alibaba-NLP/gte-Qwen2-7B-instruct', trust_remote_code=True)  # padding_side='left' by default
+        self.model = AutoModel.from_pretrained('Alibaba-NLP/gte-Qwen2-7B-instruct', trust_remote_code=True, torch_dtype=torch.float16).to(self.device)
+        # ---- FIX: disable KV cache to avoid from_legacy_cache(past_key_values=None) ----
+        self.model.config.use_cache = False
+
+        # Enable multi-gpu support
+        if torch.cuda.device_count() > 1:
+            print(f"Using {torch.cuda.device_count()} GPUs.")
+            self.model = torch.nn.DataParallel(self.model)
+            # ---- FIX (DP): also disable cache on the wrapped module ----
+            self.model.module.config.use_cache = False
 
 class GTEQwen2_7B_InstructChunkedEncoder(GTEQwen2_7B_InstructEncoder):
     
