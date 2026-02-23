@@ -77,7 +77,8 @@ if __name__ == "__main__":
     # Process neutral instructions ablation
     if args.serialization_strategy.endswith('_neutral'):
         if PATH_TO_TASK_TO_INSTRUCTIONS_FILE:
-            PATH_TO_TASK_TO_INSTRUCTIONS_FILE = PATH_TO_TASK_TO_INSTRUCTIONS_FILE.replace('task_to_instructions.json', 'task_to_instructions_neutral.json')
+            PATH_TO_TASK_TO_INSTRUCTIONS_FILE = PATH_TO_TASK_TO_INSTRUCTIONS_FILE.replace('task_to_instructions_list.json', 'task_to_instructions_neutral_list.json')
+            print(f"Replaced task to instructions file with neutral instructions file: {PATH_TO_TASK_TO_INSTRUCTIONS_FILE}")
         args.serialization_strategy = args.serialization_strategy.removesuffix('_neutral')
 
     # Serialization strategy mapping
