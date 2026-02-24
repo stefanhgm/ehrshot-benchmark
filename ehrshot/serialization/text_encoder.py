@@ -61,12 +61,9 @@ class LLMEncoder(ABC):
             elif self.__class__.__name__.startswith('Qwen3Embedding_8B') and max_input_length == 8192:
                 batch_size = 2
                 
-            # BERT models can use larger batch size, since they are generally smaller
-            if self.__class__.__name__.startswith('Bert'):
-                if max_input_length <= 512:
-                    batch_size = batch_size * 4
-                else:
-                    batch_size = batch_size * 2
+            # BERT models can use larger batch size, since they are generally smaller and use up to 512 tokens
+            if self.__class__.__name__ == 'BertEncoder':
+                    batch_size = 512
                 
             return batch_size
         
@@ -453,9 +450,14 @@ class BertEncoder(BERTLLMEncoder):
         print(f"Creating chunks for {num_inputs} inputs of size {self.max_input_length} (max_chunks: {max_chunks}).")
         inputs, chunk_counts = self.get_chunked_dataset(inputs, self.tokenizer, max_chunks=max_chunks)
         
-        print(f"Encoding {len(inputs)} chunks.")
-        gpu_factor = 1 # if torch.cuda.device_count() <= 1 else int(torch.cuda.device_count() / 2)  # Divide by 2 to ensure not too large batch per GPU
-        dataloader = DataLoader(TextsDataset(inputs), batch_size=self.batch_size * gpu_factor, shuffle=False, collate_fn=lambda batch: batch)
+        # For small models increase batch size
+        base_model = self.model.module if isinstance(self.model, torch.nn.DataParallel) else self.model
+        hidden_size = base_model.config.hidden_size
+        if hidden_size == 768:
+            self.batch_size = self.batch_size * 2
+            
+        print(f"Encoding {len(inputs)} chunks with batch size {self.batch_size}.")
+        dataloader = DataLoader(TextsDataset(inputs), batch_size=self.batch_size, shuffle=False, collate_fn=lambda batch: batch)
         
         all_embeddings_list = []
         with torch.no_grad():
