@@ -28,6 +28,7 @@ mkdir -p $EXPERIMENTS_DIR
 # Define the different options to iterate over
 text_encoders=(
     "qwen3_embedding_8b"
+    
     # "qwen3_embedding_4b"
     # "qwen3_embedding_0_6b"
     # "gteqwen2_7b_instruct"
@@ -48,8 +49,9 @@ text_encoders=(
     # "bert_large"
 )
 
-# serialization_strategies=(
-#     "unique_codes_list_recent_8k"
+serialization_strategies=(
+      "unique_codes_list_recent_8k"
+
 #     "unique_codes_list_recent_4k"
 #     "unique_codes_list_recent_2k"
 #     "unique_codes_list_recent_1k"
@@ -64,7 +66,14 @@ text_encoders=(
 #     "unique_then_list_visits_wo_allconds_w_values_8k_yaml"
 
 #     "unique_codes_list_recent_8k_neutral"
-#     # no prompt
+#     # (custom run for no prompt)
+#
+#     "unique_codes_list_recent_8k_only_demographics"
+#     "unique_codes_list_recent_8k_only_visits"
+#     "unique_codes_list_recent_8k_only_conditions"
+#     "unique_codes_list_recent_8k_only_medications"
+#     "unique_codes_list_recent_8k_only_procedures"
+#     "unique_codes_list_recent_8k_only_labs"
 # 
 #     "unique_codes_list_recent_8k_no_demographics"
 #     "unique_codes_list_recent_8k_no_visits"
@@ -72,17 +81,7 @@ text_encoders=(
 #     "unique_codes_list_recent_8k_no_medications"
 #     "unique_codes_list_recent_8k_no_procedures"
 #     "unique_codes_list_recent_8k_no_labs"
-# 
-#     "unique_codes_list_recent_8k_only_demographics"
-#     "unique_codes_list_recent_8k_only_visits"
-#     "unique_codes_list_recent_8k_only_conditions"
-#     "unique_codes_list_recent_8k_only_medications"
-#     "unique_codes_list_recent_8k_only_procedures"
-#     "unique_codes_list_recent_8k_only_labs"
-# )
-
-# Selected serialization and settings
-serialization_strategies=("unique_codes_list_recent_8k")
+)
 
 # Fixed options
 instructions_options=("true")
