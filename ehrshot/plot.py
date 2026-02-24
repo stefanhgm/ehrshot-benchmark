@@ -176,7 +176,10 @@ def plot_one_labeling_function(df: pd.DataFrame,
     
     # Set labels and title
     ax.set_title(LABELING_FUNCTION_2_PAPER_NAME[labeling_function], pad=10, fontweight='bold')
-    ax.set_ylabel(score.upper(), fontweight='bold')
+    if score == 'brier':
+        ax.set_ylabel("Brier", fontweight='bold')
+    else:
+        ax.set_ylabel(score.upper(), fontweight='bold')
     ax.set_xlabel("# of Train Examples per Class", fontweight='bold')
     
     # Set ticks - only show powers of 2, "1", and "All"
@@ -297,7 +300,10 @@ def plot_one_task_group(df: pd.DataFrame,
     # Set labels and title
     ax.set_title(TASK_GROUP_2_PAPER_NAME[task_group], 
                  size=12, pad=10, fontweight='bold')
-    ax.set_ylabel(score.upper(), fontsize=10, fontweight='bold')
+    if score == 'brier':
+        ax.set_ylabel("Brier", fontsize=10, fontweight='bold')
+    else:
+        ax.set_ylabel(score.upper(), fontsize=10, fontweight='bold')
     ax.set_xlabel("# of Train Examples per Class", fontsize=10, fontweight='bold')
     
     # Set ticks - only show powers of 2, "1", and "All"

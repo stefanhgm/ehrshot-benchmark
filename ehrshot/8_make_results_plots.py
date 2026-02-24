@@ -128,7 +128,10 @@ def plot_all_task_groups(df_results: pd.DataFrame,
                             model_heads=model_heads,
                             is_x_scale_log=is_x_scale_log)
         # Added Mean scores for task groups
-        axes.flat[idx].set_ylabel(f"Mean {score.upper()}")
+        if score == 'brier':
+            axes.flat[idx].set_ylabel("Mean Brier")
+        else:
+            axes.flat[idx].set_ylabel(f"Mean {score.upper()}")
     
     # Enhanced plot aesthetics
     fig.suptitle(f'Mean {score.upper()} by Task Group', 
@@ -592,25 +595,23 @@ if __name__ == "__main__":
 
     print("Plotting Models: ", MODEL_HEADS)
 
-    # Plotting individual AUROC/AUPRC plot for each labeling function
+    # Plotting individual AUROC/AUPRC/BRIER plot for each labeling function
     for score in tqdm(df_results['score'].unique(), desc='plot_all_labeling_functions()'):
-        if score == 'brier': continue
         plot_all_labeling_functions(df_results, score, PATH_TO_OUTPUT_DIR, 
                                     model_heads=MODEL_HEADS, is_x_scale_log=True, is_std_bars=True)
 
-    # Plotting aggregated auroc and auprc plots by task groups
+    # Plotting aggregated auroc/auprc/brier plots by task groups
     for score in tqdm(df_results['score'].unique(), desc='plot_all_task_groups()'):
-        if score == 'brier': continue
         plot_all_task_groups(df_results, score, path_to_output_dir=PATH_TO_OUTPUT_DIR, 
                              model_heads=MODEL_HEADS, is_x_scale_log=True)
 
-    # plotting aggregated auroc and auprc box plots by task groups
+    # plotting aggregated auroc and auprc box plots by task groups (still skip brier)
     for score in tqdm(df_results['score'].unique(), desc='plot_all_task_group_box_plots()'):
         if score == 'brier': continue
         plot_all_task_group_box_plots(df_results, score, path_to_output_dir=PATH_TO_OUTPUT_DIR,
                                       model_heads=MODEL_HEADS)
                                       
-    # Generate radar plots for different k values and scores
+    # Generate radar plots for different k values and scores (still skip brier)
     k_values = [8, 16, 32, 128] 
     for score in tqdm(df_results['score'].unique(), desc='plot_radar_charts()'):
         if score == 'brier': continue

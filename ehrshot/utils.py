@@ -105,6 +105,28 @@ SCORE_MODEL_HEAD_2_COLOR = {
             'lr_lbfgs' : 'tab:brown',
         },
     },
+    'brier' : {
+        'clmbr' : {
+            'lr_lbfgs' : 'tab:orange',
+        },
+        'count' : {
+            'gbm' : 'tab:green',
+            'lr_lbfgs' : 'tab:green',
+            'rf' : 'tab:orange',
+        },
+        'pytorch_clmbr' : {
+            'lr_femr' : 'tab:purple',
+        },
+        'llm' : {
+            'lr_lbfgs' : 'tab:blue',
+        },
+        'llm_llama' : {
+            'lr_lbfgs' : 'tab:green',
+        },
+        'agr' : {
+            'lr_lbfgs' : 'tab:brown',
+        },
+    },
 }
 
 LABELING_FUNCTION_2_PAPER_NAME = {
