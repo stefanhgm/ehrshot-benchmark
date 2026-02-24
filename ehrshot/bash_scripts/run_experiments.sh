@@ -1,5 +1,5 @@
 # Options
-num_threads=48
+num_threads=24
 EHRSHOT_ENV="EHRSHOT_ENV_QWEN3" # Set to EHRSHOT_ENV_QWEN3 for Qwen3, EHRSHOT_ENV for Llama3 and GteQwen2
 # Make conda activate work in non-interactive shells
 eval "$(/opt/miniforge/condabin/conda shell.bash hook)"
