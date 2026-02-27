@@ -19,6 +19,7 @@ from femr.labelers import Label
 from femr.extension import datasets as extension_datasets
 from serialization.ehr_serializer import SerializationStrategy, AGGREGATED_EVENTS_CODES_LOINC
 from serialization.ehr_serializer_factory import make_serializer_for_strategy
+# import pickle
 
 PatientDatabase = extension_datasets.PatientDatabase
 Ontology = extension_datasets.Ontology
@@ -442,7 +443,7 @@ class LLMFeaturizer():
         # 1. Added inline processing in encode()
         # 2. Added special case for self.max_length <= self.doc_max_length in _convert_to_str to save serial tokenization
         # Debug: Write out serializations and instructions as pickle
-        # output_path = "/home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/benchmark/serializations_instructions.pkl"
+        # output_path = "/home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/benchmark/serializations_instructions_out.pkl"
         # with open(output_path, 'wb') as f:
         #     pickle.dump(self.serializations_instructions, f)
         # logging.warning(f"Serialized serializations and instructions to {output_path}")
