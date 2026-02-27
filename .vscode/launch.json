@@ -71,16 +71,16 @@
                 "--path_to_database", "~/ehrshot-benchmark/EHRSHOT_ASSETS/femr/extract",
                 "--path_to_labels_dir", "~/ehrshot-benchmark/EHRSHOT_ASSETS/benchmark",
                 "--path_to_features_dir", "~/ehrshot-benchmark/EHRSHOT_ASSETS/features",
-                "--num_threads", "10",
+                "--num_threads", "20",
                 "--is_force_refresh",
-                "--text_encoder", "qwen3_embedding_8b",
-                "--text_encoder", "qwen3_embedding_4b",
+                // "--text_encoder", "qwen3_embedding_8b",
+                // "--text_encoder", "qwen3_embedding_4b",
                 // "--text_encoder", "qwen3_embedding_0_6b",
                 // "--text_encoder", "llm2vec_llama3_1_7b_instruct_supervised",
                 // "--text_encoder", "llm2vec_llama3_1_7b_instruct_mimic_/mntp-supervised-mednli/Meta-Llama-3.1-8B-Instruct_1000_mntp_steps/MedNLI_train_m-Meta-Llama-3.1-8B-Instruct_l-512/checkpoint-200",
                 // "--text_encoder", "gteqwen2_7b_instruct",
                 // "--text_encoder", "gteqwen2_1_5b_instruct",
-                // "--text_encoder", "medbert",
+                "--text_encoder", "medbert",
                 // "--text_encoder", "gteqwen2_7b_instruct_chunked_512",
                 // "--text_encoder", "llm2vec_llama3_1_7b_instruct_supervised_chunked_2k",
                 // "--text_encoder", "llm2vec_llama3_1_7b_instruct_supervised_chunked_512",
@@ -212,11 +212,11 @@
             "args": [
                 // "--llm_source_embeddings", "~/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run/gteqwen2_7b_instruct_unique_then_list_visits_wo_allconds_w_values_4k_no_labs_single_3_0_full/llm_features.pkl",
                 // "--llm_source_embeddings", "~/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run/llm2vec_llama3_1_7b_instruct_supervised_unique_then_list_visits_wo_allconds_w_values_4k_no_labs_single_3_0_full/llm_features.pkl",
-                "--llm_source_embeddings", "~/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run/qwen3_embedding_8b_unique_then_list_visits_wo_allconds_w_values_no_labs_single_3_0_full_combined_clmbr/llm_features_qwen3_original.pkl",
-                "--clmbr_source_embeddings", "~/ehrshot-benchmark/EHRSHOT_ASSETS_BASELINES/features/clmbr_features.pkl",
+                "--llm_source_embeddings", "~/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run_codes_list/qwen3_embedding_8b_unique_codes_list_recent_8k_no_unres_3_0_full/llm_features.pkl",
+                "--clmbr_source_embeddings", "~/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run_codes_list/clmbr_baseline/clmbr_features.pkl",
                 // "--output_dir", "~/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run/gteqwen2_7b_instruct_unique_then_list_visits_wo_allconds_w_values_4k_no_labs_single_3_0_full_combined_clmbr",
                 // "--output_dir", "~/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run/llm2vec_llama3_1_7b_instruct_supervised_unique_then_list_visits_wo_allconds_w_values_4k_no_labs_single_3_0_full_combined_clmbr",
-                "--output_dir", "~/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run/qwen3_embedding_8b_unique_then_list_visits_wo_allconds_w_values_no_labs_single_3_0_full_combined_clmbr",
+                "--output_dir", "~/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run_codes_list/qwen3_embedding_8b_unique_codes_list_recent_8k_no_unres_3_0_full_combined_clmbr",
             ]
         },
 
@@ -243,14 +243,29 @@
             "program": "${workspaceFolder}/ehrshot/paired_bootstrap_auroc.py",
             "console": "integratedTerminal",
             "args": [
-                "--comparisons", "Qwen3:llm:lr_lbfgs:-1:/home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run_codes_list/qwen3_embedding_8b_unique_codes_list_recent_8k_no_unres_3_0_full copy|CLMBR:clmbr:lr_lbfgs:-1:/home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run_codes_list/clmbr_baseline copy",
+                // EHRSHOT
+                "--comparisons",
+                "Qwen3:llm:lr_lbfgs:-1:/home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run_codes_list/qwen3_embedding_8b_unique_codes_list_recent_8k_no_unres_3_0_full copy|CLMBR:clmbr:lr_lbfgs:-1:/home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run_codes_list/clmbr_baseline copy",
+                "Qwen3:llm:lr_lbfgs:-1:/home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run_codes_list/qwen3_embedding_8b_unique_codes_list_recent_8k_no_unres_3_0_full copy|BioClinicalBert:llm:lr_lbfgs:-1:/home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run_codes_list/bioclinicalbert_unique_codes_list_recent_8k_no_unres_3_0_full",
                 "--bootstrap", "10000",
                 "--seed", "0",
                 "--num_threads", "16",
                 "--collapse_chexpert"
             ]
+        },
+ 
+        {
+            "name": "Python Debugger: code_category_statistics.py",
+            "type": "debugpy",
+            "request": "launch",
+            "justMyCode": false,
+            "program": "${workspaceFolder}/ehrshot/helper/code_category_statistics.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--path_to_database", "~/ehrshot-benchmark/EHRSHOT_ASSETS/femr/extract",
+                "--excluded_ontologies", "no_unres"
+            ]
         }
-
         
     ]
 }

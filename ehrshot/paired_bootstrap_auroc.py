@@ -395,12 +395,6 @@ def compute_comparison(
             for fut in iterator:
                 results.append(fut.result())
 
-    # Holm across tasks for this comparison
-    results.sort(key=lambda r: tasks.index(r.task))
-    pvals = [r.p for r in results]
-    padj = holm_adjust(pvals)
-    for r, pa in zip(results, padj):
-        r.p_adj = float(pa)
     return results
 
 
@@ -428,6 +422,10 @@ def main() -> int:
     else:
         tasks = args.tasks
 
+    # 1) compute all results first
+    all_results_by_comp: Dict[str, List[DeltaResult]] = {}
+    flat: List[DeltaResult] = []
+
     for comp in comps:
         res = compute_comparison(
             comp=comp,
@@ -437,14 +435,25 @@ def main() -> int:
             collapse_chexpert_flag=args.collapse_chexpert,
             num_threads=args.num_threads,
         )
+        all_results_by_comp[comp.name] = res
+        flat.extend(res)
+
+    # 2) global Holm across ALL (task × comparison) tests
+    all_p = [r.p for r in flat]
+    all_p_adj = holm_adjust(all_p)
+    for r, pa in zip(flat, all_p_adj):
+        r.p_adj = float(pa)
+
+    # 3) print (now r.p_adj is globally adjusted)
+    for comp in comps:
+        res = all_results_by_comp[comp.name]
 
         print(f"\n% Comparison: {comp.name}  (Δ = A - B)")
         print(f"% A={comp.a}  B={comp.b}")
-        print(r"% Columns: task & ΔAUROC & [CI_low, CI_high] & p & p_adj(Holm) & N_examples & N_patients \\")
+        print(r"% Columns: task & ΔAUROC & [CI_low, CI_high] & p & p_adj(Holm-global) & N_examples & N_patients \\")
         for r in res:
             task = LABELING_FUNCTION_2_PAPER_NAME[r.task]
-            # Highlight adjustes p with bold if <0.05 (after Holm correction)
-            p_adj = fmt_p(r.p_adj)            
+            p_adj = fmt_p(r.p_adj)
             if r.p_adj < 0.05:
                 p_adj = r"\textbf{" + p_adj + "}"
             print(
