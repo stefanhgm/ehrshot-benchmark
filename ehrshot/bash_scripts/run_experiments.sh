@@ -1,12 +1,31 @@
 # Options
-num_threads=24
-EHRSHOT_ENV="EHRSHOT_ENV_QWEN3" # Set to EHRSHOT_ENV_QWEN3 for Qwen3, EHRSHOT_ENV for Llama3 and GteQwen2
+num_threads=40
+EHRSHOT_ENV="/sc-projects/sc-proj-dh-ag-eils-ml/shared_envs/EHRSHOT_ENV_QWEN3" # Set to EHRSHOT_ENV_QWEN3 for Qwen3, EHRSHOT_ENV for Llama3 and GteQwen2
 # Make conda activate work in non-interactive shells
-eval "$(/opt/miniforge/condabin/conda shell.bash hook)"
+source /opt/miniforge/etc/profile.d/conda.sh
 conda activate "$EHRSHOT_ENV"
+
+# avoid ~/.local site-packages interfering
+export PYTHONNOUSERSITE=1
+unset PYTHONPATH
 
 # Fix libnotify issue
 # export LD_PRELOAD="$CONDA_PREFIX/lib/libittnotify.so"
+
+# Debug outputs
+set -euo pipefail
+echo "=== DEBUG ENV ==="
+echo "HOST=$(hostname)"
+echo "USER=$USER"
+echo "SHELL=$SHELL"
+echo "PWD=$(pwd)"
+echo "CONDA_EXE=${CONDA_EXE:-<unset>}"
+echo "CONDA_PREFIX=${CONDA_PREFIX:-<unset>}"
+echo "which python: $(which python || true)"
+python -V || true
+python -c "import sys; print('sys.executable:', sys.executable); print('sys.path:', sys.path[:5])" || true
+python -c "import wandb; print('wandb:', wandb.__version__)" || true
+echo "==============="
 
 # Paths
 EXPERIMENT_IDENTIFIER="full_run_codes_list"
@@ -50,7 +69,7 @@ text_encoders=(
 )
 
 serialization_strategies=(
-      "unique_codes_list_recent_8k"
+    "unique_codes_list_recent_8k"
 
 #     "unique_codes_list_recent_4k"
 #     "unique_codes_list_recent_2k"
@@ -60,7 +79,7 @@ serialization_strategies=(
 #     "unique_codes_list_8k"
 #     "unique_codes_list_recent_w_time_8k"
 
-#     "unique_then_list_visits_wo_allconds_w_values",
+#     "unique_then_list_visits_wo_allconds_w_values"
 #     "unique_then_list_visits_wo_allconds_w_values_8k_json"
 #     "unique_then_list_visits_wo_allconds_w_values_8k_xml"
 #     "unique_then_list_visits_wo_allconds_w_values_8k_yaml"
