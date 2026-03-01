@@ -120,6 +120,10 @@ class LLMEncoder(ABC):
         current_index = 0
         averaged_embeddings = []
         for count in chunk_counts:
+            # Handle case of empty chunk, which can happen if text is empty 
+            if count == 0:
+                averaged_embeddings.append(np.zeros(self.embedding_size))
+                continue
             chunk_embeddings = all_embeddings[current_index:current_index + count]
             averaged_embeddings.append(np.mean(chunk_embeddings, axis=0))
             current_index += count
