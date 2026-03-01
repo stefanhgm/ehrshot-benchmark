@@ -150,6 +150,12 @@ if __name__ == "__main__":
         'bert_large': lambda max_input_length: BertEncoder(max_input_length=max_input_length, bert_identifier='bert-large-uncased', embedding_size=1024, model_max_input_length=512),
         'deberta_v3_base': lambda max_input_length: BertEncoder(max_input_length=max_input_length, bert_identifier='microsoft/deberta-v3-base', embedding_size=768, model_max_input_length=512),
         'deberta_v3_large': lambda max_input_length: BertEncoder(max_input_length=max_input_length, bert_identifier='microsoft/deberta-v3-large', embedding_size=1024, model_max_input_length=512),
+        'bioclinicalbert-concat': lambda max_input_length: BertEncoder(max_input_length=max_input_length, bert_identifier='emilyalsentzer/Bio_ClinicalBERT', embedding_size=768, model_max_input_length=512, concat_embeddings=True),
+        'medbert-concat': lambda max_input_length: BertEncoder(max_input_length=max_input_length, bert_identifier='Charangan/MedBERT', embedding_size=768, model_max_input_length=512, concat_embeddings=True),
+        'bert_base-concat': lambda max_input_length: BertEncoder(max_input_length=max_input_length, bert_identifier='bert-base-uncased', embedding_size=768, model_max_input_length=512, concat_embeddings=True),
+        'bert_large-concat': lambda max_input_length: BertEncoder(max_input_length=max_input_length, bert_identifier='bert-large-uncased', embedding_size=1024, model_max_input_length=512, concat_embeddings=True),
+        'deberta_v3_base-concat': lambda max_input_length: BertEncoder(max_input_length=max_input_length, bert_identifier='microsoft/deberta-v3-base', embedding_size=768, model_max_input_length=512, concat_embeddings=True),
+        'deberta_v3_large-concat': lambda max_input_length: BertEncoder(max_input_length=max_input_length, bert_identifier='microsoft/deberta-v3-large', embedding_size=1024, model_max_input_length=512, concat_embeddings=True),
         # Modern Bert models could handle 8192 tokens, but only use them with 4096 tokens
         'modernbert_base': lambda max_input_length: BertEncoder(max_input_length=max_input_length, bert_identifier='answerdotai/ModernBERT-base', embedding_size=768, model_max_input_length=4096),
         'modernbert_large': lambda max_input_length: BertEncoder(max_input_length=max_input_length, bert_identifier='answerdotai/ModernBERT-large', embedding_size=1024, model_max_input_length=4096),

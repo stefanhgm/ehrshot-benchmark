@@ -128,6 +128,26 @@ class LLMEncoder(ABC):
             averaged_embeddings.append(np.mean(chunk_embeddings, axis=0))
             current_index += count
         return np.array(averaged_embeddings)
+    
+    def get_concatenated_chunks(self, all_embeddings: NDArray[Any], chunk_counts: List[int], max_chunks: int, per_chunk_embedding_size: int) -> NDArray[Any]:
+        current_index = 0
+        concatenated_embeddings = []
+        for count in chunk_counts:
+            # Handle case of empty chunk, which can happen if text is empty 
+            if count == 0:
+                concatenated_embeddings.append(np.zeros(max_chunks * per_chunk_embedding_size))
+                continue
+            chunk_embeddings = all_embeddings[current_index:current_index + count]
+            current_index += count
+
+            if count < max_chunks:
+                pad = np.zeros((max_chunks - count, per_chunk_embedding_size))
+                chunk_embeddings = np.concatenate([chunk_embeddings, pad], axis=0)
+            else:
+                chunk_embeddings = chunk_embeddings[:max_chunks]
+
+            concatenated_embeddings.append(chunk_embeddings.reshape(max_chunks * per_chunk_embedding_size))
+        return np.array(concatenated_embeddings)
         
     @abstractmethod
     def _encode(self, inputs: List, **kwargs) -> NDArray[Any]:
@@ -421,11 +441,18 @@ class STGTELargeENv15Encoder(LLMEncoder):
 
 class BertEncoder(BERTLLMEncoder):
     
-    def __init__(self, max_input_length: int, bert_identifier: str, embedding_size: int, model_max_input_length: int, **kwargs) -> None:
+    def __init__(self, max_input_length: int, bert_identifier: str, embedding_size: int, model_max_input_length: int, concat_embeddings: bool = False, **kwargs) -> None:
         # use variable bert_identifier, embedding_size, model_max_input_length to allow for different BERT models
         super().__init__(embedding_size=embedding_size, model_max_input_length=model_max_input_length, max_input_length=max_input_length)  
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.tokenizer = AutoTokenizer.from_pretrained(bert_identifier)
+
+        self.concat_embeddings = concat_embeddings
+        self.per_chunk_embedding_size = embedding_size
+        if self.concat_embeddings:
+            BASE_INPUT_LENGTH = 8192
+            max_chunks = BASE_INPUT_LENGTH // self.max_input_length
+            self.embedding_size = self.per_chunk_embedding_size * max_chunks
 
         # Prefer safetensors, but allow fallback to PyTorch bin weights
         try:
@@ -478,20 +505,14 @@ class BertEncoder(BERTLLMEncoder):
 
         all_embeddings = np.concatenate(all_embeddings_list, axis=0)
 
-        all_embeddings = self.get_averaged_chunks(all_embeddings, chunk_counts)
+        if self.concat_embeddings:
+            all_embeddings = self.get_concatenated_chunks(all_embeddings, chunk_counts, max_chunks, self.per_chunk_embedding_size)
+        else:
+            all_embeddings = self.get_averaged_chunks(all_embeddings, chunk_counts)
         assert len(all_embeddings) == num_inputs
 
         return all_embeddings
-        
-#         # Old routine: 
-#         dataset = dataset.map(self.get_last_avg_embedding, batched=True, batch_size=self.batch_size)
-#         all_embeddings = np.array(dataset['embedding'])
-#         
-#         # Average chunk embeddings for each original text
-#         all_embeddings = self.get_averaged_chunks(all_embeddings, chunk_counts)
-#         assert len(all_embeddings) == num_inputs
-#             
-#         return all_embeddings
+
 
 class TextEncoder:
     def __init__(self, encoder: LLMEncoder):
