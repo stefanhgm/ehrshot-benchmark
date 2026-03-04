@@ -19,14 +19,14 @@
 #SBATCH --partition=pgpu
 #SBATCH --gres=gpu:8
 #SBATCH --cpus-per-task=96
-#SBATCH --mem=1000G
+#SBATCH --mem=1950G
 #SBATCH --exclusive
 
 # Only H200
 ##SBATCH --partition=pgpu
 ##SBATCH --gres=gpu:8
 ##SBATCH --cpus-per-task=96
-##SBATCH --mem=1000G
+##SBATCH --mem=1950G
 ##SBATCH --exclusive
 ##SBATCH --exclude=s-sc-dgx01,s-sc-dgx02,s-sc-pgpu08
 
@@ -34,7 +34,7 @@
 ##SBATCH --partition=pgpu
 ##SBATCH --gres=gpu:8
 ##SBATCH --cpus-per-task=96
-##SBATCH --mem=1000G
+##SBATCH --mem=1950G
 ##SBATCH --exclusive
 ##SBATCH --exclude=s-sc-pgpu08,s-sc-pgpu11,s-sc-pgpu12,s-sc-pgpu13,s-sc-pgpu14,s-sc-pgpu15
 
