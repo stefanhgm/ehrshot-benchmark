@@ -1,5 +1,5 @@
 # Options
-num_threads=40
+num_threads=32
 EHRSHOT_ENV="/sc-projects/sc-proj-dh-ag-eils-ml/shared_envs/EHRSHOT_ENV_QWEN3" # Set to EHRSHOT_ENV_QWEN3 for Qwen3, EHRSHOT_ENV for Llama3 and GteQwen2
 # Make conda activate work in non-interactive shells
 source /opt/miniforge/etc/profile.d/conda.sh
@@ -66,6 +66,12 @@ text_encoders=(
     # "deberta_v3_large"
     # "bert_base"
     # "bert_large"
+    # "bioclinicalbert-concat"
+    # "medbert-concat"
+    # "deberta_v3_base-concat"
+    # "deberta_v3_large-concat"
+    # "bert_base-concat"
+    # "bert_large-concat"
 )
 
 serialization_strategies=(
