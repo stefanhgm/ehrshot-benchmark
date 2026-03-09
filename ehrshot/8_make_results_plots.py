@@ -272,7 +272,7 @@ def plot_radar_chart(df_results: pd.DataFrame, k: int, path_to_output_dir: str, 
             return "EHR Foundation Model"
         elif model_head == "Count-based+GBM":
             return "Counts Baseline"
-        elif model_head == "GTE Qwen2 7B+LR":
+        elif model_head == "GTE Qwen3 8B+LR":
             return "LLM Encoder"
         return model_head
     
