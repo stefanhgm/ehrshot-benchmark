@@ -240,8 +240,12 @@ if __name__ == "__main__":
         for head in model_heads:
             # TODO: Better way to do this than hardcoding path
             # Check if in experimental LLM setting, then only consider LLM models
-            if '/experiments/' in PATH_TO_FEATURES_DIR and model != 'llm':
-                continue
+            if 'count_' in PATH_TO_FEATURES_DIR:
+                if model != 'count':
+                    continue
+            elif '/experiments/' in PATH_TO_FEATURES_DIR:
+                if model != 'llm':
+                    continue
             # Unpack each individual featurization we want to test
             assert model in feature_matrixes, f"Feature matrix not found for `{model}`. Are you sure you have generated features for this model? If not, you'll need to rerun `generate_features.py` or `generate_clmbr_representations.py`."
             X_train: np.ndarray = feature_matrixes[model][train_pids_idx]
