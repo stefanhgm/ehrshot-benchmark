@@ -1,4 +1,5 @@
 import argparse
+import datetime
 import pickle
 import os
 from typing import Any, Dict
@@ -36,6 +37,8 @@ if __name__ == "__main__":
     # Combine two featurizations of each patient: one for the patient's age, and one for the count of every code
     # they've had in their record up to the prediction timepoint for each label
     age = AgeFeaturizer()
+    # count = CountFeaturizer(is_ontology_expansion=True, numeric_value_decile=True, string_value_combination=True)
+    # count = CountFeaturizer(is_ontology_expansion=True, numeric_value_decile=True, string_value_combination=True, time_bins = [datetime.timedelta(days=30), datetime.timedelta(days=180), datetime.timedelta(days=365), datetime.timedelta(days=99999)])
     count = CountFeaturizer(is_ontology_expansion=True)
     featurizer_age_count = FeaturizerList([age, count])
 
