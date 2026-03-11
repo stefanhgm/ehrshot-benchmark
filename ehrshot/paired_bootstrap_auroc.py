@@ -18,6 +18,10 @@ Notes:
   (after validating the test rows match across replicates).
 - Paired, patient-level (cluster) bootstrap on ΔAUROC = AUROC(A) - AUROC(B)
 - Optional collapse of CheXpert subtasks into a single sub_task 'chexpert'
+  When collapsed, the bootstrap computes macro-averaged AUROC (mean of per-subtask
+  AUROCs) inside each replicate, matching the macro-average metric reported in the
+  paper. This avoids a Simpson's paradox where the pooled (micro) AUROC can disagree
+  with the macro-averaged AUROC due to varying subtask prevalences.
 - Holm correction across tasks per comparison
 - Parallel per-task with --num_threads
 """
@@ -31,7 +35,9 @@ from utils import LABELING_FUNCTION_2_PAPER_NAME
 
 import numpy as np
 import pandas as pd
-from sklearn.metrics import roc_auc_score
+# roc_auc_score is not called directly — we use _fast_weighted_auroc which
+# reimplements the same computation with precomputed sort order for speed.
+# from sklearn.metrics import roc_auc_score
 
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
@@ -58,6 +64,40 @@ TASKS_DEFAULT = [
     "new_pancan",
     "chexpert",
 ]
+
+# Canonical display order for printing results.
+TASK_DISPLAY_ORDER = [
+    "guo_los",
+    "guo_readmission",
+    "guo_icu",
+    "lab_thrombocytopenia",
+    "lab_hyperkalemia",
+    "lab_hypoglycemia",
+    "lab_hyponatremia",
+    "lab_anemia",
+    "new_hypertension",
+    "new_hyperlipidemia",
+    "new_pancan",
+    "new_celiac",
+    "new_lupus",
+    "new_acutemi",
+    "chexpert",
+]
+
+# Override for task display names (falls back to LABELING_FUNCTION_2_PAPER_NAME).
+TASK_DISPLAY_NAME_OVERRIDE = {
+    "guo_icu": "ICU Transfer",
+}
+
+
+def task_display_name(task: str) -> str:
+    return TASK_DISPLAY_NAME_OVERRIDE.get(task, LABELING_FUNCTION_2_PAPER_NAME[task])
+
+
+def sort_results_by_display_order(results: List) -> List:
+    """Sort DeltaResult list according to TASK_DISPLAY_ORDER."""
+    order = {t: i for i, t in enumerate(TASK_DISPLAY_ORDER)}
+    return sorted(results, key=lambda r: order.get(r.task, 999))
 
 
 @dataclass(frozen=True)
@@ -108,6 +148,92 @@ def holm_adjust(pvals: List[float]) -> List[float]:
 
 
 # ----------------------------
+# Fast weighted AUROC with precomputed sort order
+# ----------------------------
+
+def _precompute_auroc_order(y, proba):
+    """Sort predictions once in descending order and find distinct-score boundaries.
+
+    Returns (desc_order, y_sorted, proba_sorted, threshold_idxs) to be reused
+    across all bootstrap iterations.
+    """
+    desc_order = np.argsort(-proba, kind='mergesort')
+    y_sorted = y[desc_order].astype(np.float64)
+    proba_sorted = proba[desc_order].astype(np.float64)
+    distinct = np.nonzero(np.diff(proba_sorted))[0]
+    threshold_idxs = np.concatenate([distinct, [len(y_sorted) - 1]])
+    return desc_order, y_sorted, proba_sorted, threshold_idxs
+
+
+def _fast_weighted_auroc(y_sorted, proba_sorted, desc_order, threshold_idxs, sample_weight=None):
+    """Compute AUROC using precomputed sort order. Numerically identical to
+    sklearn's roc_auc_score but avoids redundant sorting.
+
+    When sample_weight has zeros (rare in patient-bootstrap), the distinct-
+    threshold indices are recomputed for the filtered array to match sklearn's
+    zero-weight filtering behavior exactly.
+    """
+    if sample_weight is not None:
+        w = sample_weight[desc_order]
+        if np.any(w == 0):
+            nonzero = w != 0
+            ys = y_sorted[nonzero]
+            ps = proba_sorted[nonzero]
+            w = w[nonzero]
+            distinct = np.nonzero(np.diff(ps))[0]
+            tidx = np.concatenate([distinct, [len(ys) - 1]])
+        else:
+            ys = y_sorted
+            tidx = threshold_idxs
+        tps = np.cumsum(ys * w, dtype=np.float64)[tidx]
+        fps = np.cumsum((1.0 - ys) * w, dtype=np.float64)[tidx]
+    else:
+        tps = np.cumsum(y_sorted, dtype=np.float64)[threshold_idxs]
+        fps = 1.0 + threshold_idxs.astype(np.float64) - tps
+
+    tps = np.concatenate([[0.0], tps])
+    fps = np.concatenate([[0.0], fps])
+
+    if fps[-1] <= 0 or tps[-1] <= 0:
+        raise ValueError("Only one class present or all weight on one class")
+
+    fpr = fps / fps[-1]
+    tpr = tps / tps[-1]
+    return float(np.trapz(tpr, fpr))
+
+
+# ----------------------------
+# Macro-averaged AUROC helper
+# ----------------------------
+
+def _macro_auroc_fast(y, sub_tasks, precomp_a, precomp_b, sample_weight=None):
+    """Compute macro-averaged ΔAUROC: mean of per-subtask AUROCs for each model.
+
+    precomp_a / precomp_b are dicts mapping subtask -> (mask, desc_order,
+    y_sorted, proba_sorted, threshold_idxs), precomputed once before the
+    bootstrap loop.
+
+    Returns (auroc_a, auroc_b) as a tuple.
+    """
+    aurocs_a = []
+    aurocs_b = []
+    for s, (mask, do_a, ys_a, ps_a, ti_a) in precomp_a.items():
+        _, do_b, ys_b, ps_b, ti_b = precomp_b[s]
+        ys = y[mask]
+        if len(np.unique(ys)) < 2:
+            continue
+        ws = sample_weight[mask] if sample_weight is not None else None
+        if ws is not None:
+            if np.all(ws[ys == 0] == 0) or np.all(ws[ys == 1] == 0):
+                continue
+        aurocs_a.append(_fast_weighted_auroc(ys_a, ps_a, do_a, ti_a, sample_weight=ws))
+        aurocs_b.append(_fast_weighted_auroc(ys_b, ps_b, do_b, ti_b, sample_weight=ws))
+    if len(aurocs_a) == 0:
+        raise RuntimeError("No subtask had both classes present for macro AUROC.")
+    return float(np.mean(aurocs_a)), float(np.mean(aurocs_b))
+
+
+# ----------------------------
 # Bootstrap test
 # ----------------------------
 
@@ -118,8 +244,38 @@ def paired_patient_bootstrap_delta_auroc(
     patient_ids: np.ndarray,
     B: int,
     seed: int,
+    sub_tasks: Optional[np.ndarray] = None,
 ) -> Tuple[float, float, float, float]:
-    delta_obs = roc_auc_score(y, proba_a) - roc_auc_score(y, proba_b)
+    """Paired, patient-level (cluster) bootstrap on ΔAUROC = AUROC(A) - AUROC(B).
+
+    If sub_tasks is provided, AUROC is computed as the macro average over subtasks
+    (mean of per-subtask AUROCs) inside each bootstrap replicate. This is used for
+    collapsed CheXpert so the bootstrap statistic matches the macro-averaged AUROC
+    reported in the paper, avoiding Simpson's paradox from pooled/micro AUROC.
+
+    Sort orders are precomputed once before the loop so each bootstrap iteration
+    only performs O(n) cumulative sums instead of O(n log n) sorting.
+    """
+    use_macro = sub_tasks is not None
+
+    # Precompute sort orders once
+    if use_macro:
+        unique_subs = np.unique(sub_tasks)
+        precomp_a = {}
+        precomp_b = {}
+        for s in unique_subs:
+            mask = sub_tasks == s
+            precomp_a[s] = (mask, *_precompute_auroc_order(y[mask], proba_a[mask]))
+            precomp_b[s] = (mask, *_precompute_auroc_order(y[mask], proba_b[mask]))
+        da_obs, db_obs = _macro_auroc_fast(y, sub_tasks, precomp_a, precomp_b)
+        delta_obs = da_obs - db_obs
+    else:
+        do_a, ys_a, ps_a, ti_a = _precompute_auroc_order(y, proba_a)
+        do_b, ys_b, ps_b, ti_b = _precompute_auroc_order(y, proba_b)
+        delta_obs = (
+            _fast_weighted_auroc(ys_a, ps_a, do_a, ti_a)
+            - _fast_weighted_auroc(ys_b, ps_b, do_b, ti_b)
+        )
 
     unique_pids = np.unique(patient_ids)
     P = len(unique_pids)
@@ -134,13 +290,20 @@ def paired_patient_bootstrap_delta_auroc(
         counts = np.bincount(sampled, minlength=P).astype(np.float64)
         w = counts[pid_ints]
 
-        # roc_auc_score errors if only one class overall (rare, but guard anyway)
+        # Guard against degenerate single-class data (rare)
         if np.all(y == 0) or np.all(y == 1):
             continue
 
-        da = roc_auc_score(y, proba_a, sample_weight=w)
-        db = roc_auc_score(y, proba_b, sample_weight=w)
-        deltas.append(da - db)
+        try:
+            if use_macro:
+                da, db = _macro_auroc_fast(y, sub_tasks, precomp_a, precomp_b, sample_weight=w)
+            else:
+                da = _fast_weighted_auroc(ys_a, ps_a, do_a, ti_a, sample_weight=w)
+                db = _fast_weighted_auroc(ys_b, ps_b, do_b, ti_b, sample_weight=w)
+            deltas.append(da - db)
+        except (ValueError, RuntimeError):
+            # bootstrap sample may have only one class in a subtask; skip
+            continue
 
     if len(deltas) < max(100, B // 10):
         raise RuntimeError(f"Too few valid bootstrap replicates ({len(deltas)}/{B}).")
@@ -176,6 +339,11 @@ def collapse_chexpert(df: pd.DataFrame, task: str, do_collapse: bool) -> pd.Data
     if not do_collapse or task != "chexpert":
         return df
     df = df.copy()
+    # Preserve original subtask labels for macro-averaged bootstrap.
+    # The "sub_task" column is overwritten to "chexpert" so that filter_df
+    # treats all rows as one task, but "original_sub_task" is kept so we
+    # can compute per-subtask AUROCs inside bootstrap replicates.
+    df["original_sub_task"] = df["sub_task"]
     df["sub_task"] = "chexpert"
     return df
 
@@ -224,14 +392,19 @@ def align_two(df_a: pd.DataFrame, df_b: pd.DataFrame) -> Tuple[np.ndarray, np.nd
 
     return y_a.astype(int), a["proba"].to_numpy(float), b["proba"].to_numpy(float), pid_a
 
-def mean_proba_over_replicates(df: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+def mean_proba_over_replicates(df: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray, np.ndarray, Optional[np.ndarray]]:
     """
-    Returns (y, patient_ids, mean_proba) averaged over all replicates.
+    Returns (y, patient_ids, mean_proba, original_sub_tasks) averaged over all replicates.
     Requires that all replicates contain the same (patient_id, label) rows in the same order
     (or at least sortable to the same order).
+
+    original_sub_tasks is non-None only when the "original_sub_task" column exists
+    (i.e. for collapsed CheXpert), and is used downstream for macro-averaged bootstrap.
     """
+    has_orig_sub = "original_sub_task" in df.columns
+
     reps = sorted(df["replicate"].unique().tolist())
-    ys, pids, probas = [], [], []
+    ys, pids, probas, orig_subs = [], [], [], []
 
     for r in reps:
         d = df[df["replicate"] == r].copy()
@@ -239,21 +412,32 @@ def mean_proba_over_replicates(df: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray
         ys.append(d["label"].to_numpy())
         pids.append(d["patient_id"].to_numpy())
         probas.append(d["proba"].to_numpy(float))
+        if has_orig_sub:
+            orig_subs.append(d["original_sub_task"].to_numpy())
 
     # Validate identical rows across replicates (strong check)
     y0, pid0 = ys[0], pids[0]
-    for yr, pidr in zip(ys[1:], pids[1:]):
+    orig_sub0 = orig_subs[0] if has_orig_sub else None
+    for i in range(1, len(reps)):
+        yr, pidr = ys[i], pids[i]
         if not (np.array_equal(y0, yr) and np.array_equal(pid0, pidr)):
             # try sorting within each replicate by (patient_id,label) to recover
-            ys2, pids2, probas2 = [], [], []
+            sort_cols = ["patient_id", "label"]
+            if has_orig_sub:
+                sort_cols.append("original_sub_task")
+            ys2, pids2, probas2, orig_subs2 = [], [], [], []
             for r in reps:
-                d = df[df["replicate"] == r].sort_values(["patient_id", "label"], kind="mergesort").reset_index(drop=True)
+                d = df[df["replicate"] == r].sort_values(sort_cols, kind="mergesort").reset_index(drop=True)
                 ys2.append(d["label"].to_numpy())
                 pids2.append(d["patient_id"].to_numpy())
                 probas2.append(d["proba"].to_numpy(float))
+                if has_orig_sub:
+                    orig_subs2.append(d["original_sub_task"].to_numpy())
             y0, pid0 = ys2[0], pids2[0]
+            orig_sub0 = orig_subs2[0] if has_orig_sub else None
             ok = True
-            for yr2, pidr2 in zip(ys2[1:], pids2[1:]):
+            for j in range(1, len(reps)):
+                yr2, pidr2 = ys2[j], pids2[j]
                 if not (np.array_equal(y0, yr2) and np.array_equal(pid0, pidr2)):
                     ok = False
                     break
@@ -262,12 +446,12 @@ def mean_proba_over_replicates(df: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray
                     "Replicates do not share the same test rows (patient_id/label). "
                     "Need example_id to average per-example across replicates."
                 )
-            ys, pids, probas = ys2, pids2, probas2
+            ys, pids, probas, orig_subs = ys2, pids2, probas2, orig_subs2
             break
 
     # CAREFUL: Average probabilities across replicates (not labels) to get mean proba across shot splits
     mean_proba = np.mean(np.stack(probas, axis=0), axis=0)
-    return y0.astype(int), pid0, mean_proba
+    return y0.astype(int), pid0, mean_proba, orig_sub0
 
 
 # ----------------------------
@@ -287,13 +471,23 @@ def compute_one_task(
     df_b = filter_df(read_all_probas(spec_b.exp_dir, task), spec_b, task, collapse_chexpert_flag)
 
     # Use all replicates by averaging probabilities per test row
-    y_a, pid_a, proba_a = mean_proba_over_replicates(df_a)
-    y_b, pid_b, proba_b = mean_proba_over_replicates(df_b)
+    y_a, pid_a, proba_a, orig_sub_a = mean_proba_over_replicates(df_a)
+    y_b, pid_b, proba_b, orig_sub_b = mean_proba_over_replicates(df_b)
 
     # Align A vs B (should match; if not, attempt sort-based alignment)
     tmp_a = pd.DataFrame({"patient_id": pid_a, "label": y_a, "proba": proba_a})
     tmp_b = pd.DataFrame({"patient_id": pid_b, "label": y_b, "proba": proba_b})
     y, pa, pb, pids = align_two(tmp_a, tmp_b)
+
+    # For collapsed CheXpert, pass original subtask labels so the bootstrap
+    # computes macro-averaged AUROC (mean of per-subtask AUROCs) per replicate,
+    # matching the metric reported in the paper.
+    sub_tasks_for_bootstrap = None
+    if orig_sub_a is not None:
+        # Validate that both models share the same subtask labels in the same order
+        if orig_sub_b is None or not np.array_equal(orig_sub_a, orig_sub_b):
+            raise RuntimeError("original_sub_task mismatch between models A and B for chexpert")
+        sub_tasks_for_bootstrap = orig_sub_a
 
     delta, lo, hi, p = paired_patient_bootstrap_delta_auroc(
         y=y,
@@ -302,6 +496,7 @@ def compute_one_task(
         patient_ids=pids,
         B=bootstrap,
         seed=seed,
+        sub_tasks=sub_tasks_for_bootstrap,
     )
 
     return DeltaResult(
@@ -343,7 +538,7 @@ def parse_comparison(s: str) -> ComparisonSpec:
     b = parse_model_spec(right)
     if a.k != b.k:
         raise ValueError(f"k mismatch in comparison: {a.k} vs {b.k}. (You said one k per run.)")
-    name = f"{a.display_name}_vs_{b.display_name}"
+    name = f"{a.display_name}_vs_{b.display_name}_k{a.k}"
     return ComparisonSpec(name=name, a=a, b=b)
 
 
@@ -355,6 +550,13 @@ def fmt_p(p: float) -> str:
     if p < 1e-4:
         return r"$<10^{-4}$"
     return f"{p:.4f}"
+
+
+def fmt_compact_p(p: float) -> str:
+    """Format p-value for the compact table."""
+    if p < 0.001:
+        return "{<}0.001"
+    return f"{p:.3f}"
 
 
 def autodiscover_tasks(exp_dir: str) -> List[str]:
@@ -438,29 +640,76 @@ def main() -> int:
         all_results_by_comp[comp.name] = res
         flat.extend(res)
 
-    # 2) global Holm across ALL (task × comparison) tests
-    all_p = [r.p for r in flat]
-    all_p_adj = holm_adjust(all_p)
-    for r, pa in zip(flat, all_p_adj):
-        r.p_adj = float(pa)
+    # 2) Per-k Holm correction: group all comparisons sharing the same k and
+    #    correct across (comparisons × tasks) within each k-level. This treats
+    #    each shot setting as a separate family of tests (e.g. 3 baselines ×
+    #    15 tasks = 45 tests per k), which is appropriate when different k
+    #    values represent distinct experimental conditions.
+    k_groups: Dict[int, List[DeltaResult]] = {}
+    for r in flat:
+        k_groups.setdefault(r.k, []).append(r)
+    for k, results_in_k in k_groups.items():
+        pvals = [r.p for r in results_in_k]
+        padj = holm_adjust(pvals)
+        for r, pa in zip(results_in_k, padj):
+            r.p_adj = float(pa)
 
-    # 3) print (now r.p_adj is globally adjusted)
+    # # 3) print per-comparison tables (verbose)
+    # for comp in comps:
+    #     res = sort_results_by_display_order(all_results_by_comp[comp.name])
+
+    #     print(f"\n% Comparison: {comp.a.display_name}_vs_{comp.b.display_name} (k={comp.a.k})  (Δ = A - B)")
+    #     print(f"% A={comp.a}  B={comp.b}")
+    #     print(r"% Columns: task & ΔAUROC & [CI_low, CI_high] & p & p_adj(Holm-per-k) & N_examples & N_patients \\")
+    #     for r in res:
+    #         tname = task_display_name(r.task)
+    #         p_adj = fmt_p(r.p_adj)
+    #         if r.p_adj < 0.05:
+    #             p_adj = r"\textbf{" + p_adj + "}"
+    #         print(
+    #             f"{tname} & {r.delta:+.4f} & "
+    #             f"[{r.ci_low:+.4f}, {r.ci_high:+.4f}] & "
+    #             f"{fmt_p(r.p)} & {p_adj} & {r.n_examples} & {r.n_patients} \\\\"
+    #         )
+
+    # 4) Compact tables: one per k, one row per task, one column per baseline.
+    result_index: Dict[Tuple[str, int, str], DeltaResult] = {}
+    baseline_names_seen: Dict[int, List[str]] = {}
     for comp in comps:
-        res = all_results_by_comp[comp.name]
+        bname = comp.b.display_name
+        k = comp.a.k
+        baseline_names_seen.setdefault(k, [])
+        if bname not in baseline_names_seen[k]:
+            baseline_names_seen[k].append(bname)
+        for r in all_results_by_comp[comp.name]:
+            result_index[(bname, k, r.task)] = r
 
-        print(f"\n% Comparison: {comp.name}  (Δ = A - B)")
-        print(f"% A={comp.a}  B={comp.b}")
-        print(r"% Columns: task & ΔAUROC & [CI_low, CI_high] & p & p_adj(Holm-global) & N_examples & N_patients \\")
-        for r in res:
-            task = LABELING_FUNCTION_2_PAPER_NAME[r.task]
-            p_adj = fmt_p(r.p_adj)
-            if r.p_adj < 0.05:
-                p_adj = r"\textbf{" + p_adj + "}"
-            print(
-                f"{task} & {r.delta:+.4f} & "
-                f"[{r.ci_low:+.4f}, {r.ci_high:+.4f}] & "
-                f"{fmt_p(r.p)} & {p_adj} & {r.n_examples} & {r.n_patients} \\\\"
-            )
+    for k in sorted(k_groups.keys()):
+        baselines = baseline_names_seen.get(k, [])
+        if not baselines:
+            continue
+        k_label = "All" if k == -1 else f"{k}-shot"
+        print(f"\n% Compact table: k={k} ({k_label})")
+        header_parts = " & ".join([f"$\\Delta$ vs {b}" for b in baselines])
+        print(f"% Task & {header_parts} \\\\")
+        for task_key in TASK_DISPLAY_ORDER:
+            tname = task_display_name(task_key)
+            cells = []
+            for bname in baselines:
+                r = result_index.get((bname, k, task_key))
+                if r is None:
+                    cells.append("---")
+                    continue
+                d = f"{r.delta:+.3f}"
+                ci_low = f"{r.ci_low:+.3f}"
+                ci_high = f"{r.ci_high:+.3f}"
+                p = fmt_compact_p(r.p_adj)
+
+                if r.p_adj < 0.05:
+                    cells.append(f"\\bestcip{{{d}}}{{{ci_low}}}{{{ci_high}}}{{{p}}}")
+                else:
+                    cells.append(f"\\estcip{{{d}}}{{{ci_low}}}{{{ci_high}}}{{{p}}}")
+            print(f"{tname} & {' & '.join(cells)} \\\\")
 
     return 0
 
