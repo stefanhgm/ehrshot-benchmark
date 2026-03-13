@@ -12,14 +12,16 @@ class EmbeddingProcessor:
     A class to handle the processing of embeddings using various models.
     """
     
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: Dict[str, Any], instruction: str):
         """
         Initialize the embedding processor with configuration.
         
         Args:
             config: Dictionary containing configuration parameters.
+            instruction: The instruction to be used for embedding generation.
         """
         self.config = config
+        self.instruction = instruction
         # Set device
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         
@@ -38,12 +40,11 @@ class EmbeddingProcessor:
             embedding_df = self._generate_embeddings(prepared_records, kwargs)
             
             # Save embeddings if specified
-            if kwargs.get("save_embeddings", False):
-                self._save_embeddings(embedding_df, kwargs)
+            self._save_embeddings(embedding_df, kwargs)
                 
             # Return early if disease unspecific and only calculating embeddings
-            if kwargs["calculate_embeddings"] and kwargs["diseaseunspecific"]:
-                return embedding_df
+            # if kwargs["calculate_embeddings"] and kwargs["diseaseunspecific"]:
+            #     return embedding_df
         else:
             
             if not kwargs["infer_all"]:
@@ -53,8 +54,9 @@ class EmbeddingProcessor:
                     self.config["embeddingfile_qwen"],
                     self.config["embeddingfile_qwen3"],
                     self.config["embeddingfile_llm2vec"],
-                    self.config["embeddingfile_nvembed"],
-                    self.config["embeddingfile_clmbr"]
+                    self.config["embeddingfile_clmbr"],
+                    self.config["embeddingfile_bioclinicalbert"],
+                    self.config["embeddingfile_qwenclmbrcodes"]
                 )
                     
         return embedding_df
@@ -74,20 +76,20 @@ class EmbeddingProcessor:
         
         if model_name == "LLM2Vec":
             return self._process_llm2vec(prepared_records, kwargs)
-        elif model_name == "NVEmbed":
-            return self._process_nvembed(prepared_records, kwargs)
         elif model_name == "Qwen":
             return self._process_qwen(prepared_records, kwargs)
         elif model_name == "Qwen3":
             return self._process_qwen(prepared_records, kwargs)
         elif model_name == "Llama":
             return self._process_llama(prepared_records, kwargs)
+        elif model_name == "bioclinicalbert":
+            return self._process_bert(prepared_records, kwargs)
         else:
             raise ValueError(f"Invalid model name: {model_name}")
     
     def _process_llm2vec(self, prepared_records: pd.DataFrame, kwargs: Dict[str, Any]) -> pd.DataFrame:
         """Process using LLM2Vec model."""
-        from llm2vec import LLM2Vec
+        from llm2vec import LLM2Vec 
         
         model = LLM2Vec.from_pretrained(
             "McGill-NLP/LLM2Vec-Meta-Llama-3-8B-Instruct-mntp",
@@ -98,40 +100,9 @@ class EmbeddingProcessor:
             doc_max_length=kwargs["tokenlength"]
         )
 
-        queries = prepared_records.queries.tolist()
-        q_reps = model.encode(queries, batch_size=self.config["batch_size"], device=self.config["device"])
-
-        print(q_reps.shape)
-        embedding_df = pd.DataFrame()
-        embedding_df["eid"] = prepared_records["eid"].astype(int)
-        embedding_df["q_reps"] = list(q_reps)
-        
-        return embedding_df
-    
-    def _process_nvembed(self, prepared_records: pd.DataFrame, kwargs: Dict[str, Any]) -> pd.DataFrame:
-        """Process using NVEmbed model."""
-        model = AutoModel.from_pretrained(
-            "nvidia/NV-Embed-v2", 
-            device_map="cuda" if torch.cuda.is_available() else "cpu", 
-            trust_remote_code=True, 
-            torch_dtype=torch.float16
-        )
-        os.environ["TOKENIZERS_PARALLELISM"] = "false"
-        task_name_to_instruct = self.config["instruction"]
-
-        query_prefix = f"Instruct: {task_name_to_instruct}\nQuery: "
-        queries = [row[1] for row in prepared_records["queries"]]
-        max_length = kwargs["tokenlength"]
-
-        with torch.no_grad():
-            q_reps = model._do_encode(
-                queries, 
-                batch_size=self.config["batch_size"], 
-                instruction=query_prefix, 
-                max_length=max_length, 
-                num_workers=1, 
-                return_numpy=True
-            )
+        #queries = prepared_records.queries.tolist()
+        queries_complete = [[self.instruction, q] for q in prepared_records.queries]
+        q_reps = model.encode(queries_complete, batch_size=self.config["batch_size"], device=self.config["device"])
 
         print(q_reps.shape)
         embedding_df = pd.DataFrame()
@@ -155,7 +126,7 @@ class EmbeddingProcessor:
 
         # Prepare data
         task_name_to_instruct = self.config["instruction"]
-        queries = [f"Instruct: {task_name_to_instruct}\nQuery: {query}" for query in [row[1] for row in prepared_records["queries"]]]
+        queries = [f"Instruct: {task_name_to_instruct}\nQuery:\n{query}" for query in [row for row in prepared_records["queries"]]]
 
         # Load model components
         if(kwargs["model"] == "Qwen3"):
@@ -165,6 +136,9 @@ class EmbeddingProcessor:
             tokenizer = AutoTokenizer.from_pretrained('Alibaba-NLP/gte-Qwen2-7B-instruct', trust_remote_code=True)
             #model = AutoModel.from_pretrained('Alibaba-NLP/gte-Qwen2-7B-instruct', trust_remote_code=True, device_map="auto", torch_dtype=torch.float16)
             model = AutoModel.from_pretrained('Alibaba-NLP/gte-Qwen2-7B-instruct', trust_remote_code=True, torch_dtype=torch.float16)
+            
+            # ---- FIX: disable KV cache to avoid from_legacy_cache(past_key_values=None) ----
+            model.config.use_cache = False
 
         # Set up GPU with mixed precision
         model.to(self.device)
@@ -319,6 +293,34 @@ class EmbeddingProcessor:
         })
         
         return embedding_df
+
+    def _process_bert(self, prepared_records: pd.DataFrame, kwargs: Dict[str, Any]) -> pd.DataFrame:
+        """Process using a BERT embedding model."""
+        from bert import TextEncoder, BertEncoder
+
+        encoder = BertEncoder(
+            max_input_length=512,
+            bert_identifier="emilyalsentzer/Bio_ClinicalBERT",
+            embedding_size=768,
+            model_max_input_length=512
+        )
+
+        text_encoder = TextEncoder(encoder)
+
+        queries = prepared_records["queries"].tolist()
+
+
+        embeddings = text_encoder.encode_texts(
+            instructions=[None]*len(queries),  # No specific instructions for BERT
+            texts=queries,
+        )
+
+        embedding_df = pd.DataFrame({
+            "eid": prepared_records["eid"].astype(int),
+            "q_reps": list(embeddings)
+        })
+
+        return embedding_df
     
     def _save_embeddings(self, embedding_df: pd.DataFrame, kwargs: Dict[str, Any]) -> None:
         """
@@ -346,62 +348,74 @@ class EmbeddingProcessor:
         embedding_df["q_reps"] = embedding_df["q_reps"].apply(lambda x: torch.tensor(x, dtype=torch.float32))
         return embedding_df
 
-    def _load_multiple_embeddings(self, qwen_file: str, qwen_file3: str, llm2vec_file: str, nvembed_file: str, clmbr_file: str) -> pd.DataFrame:
+    def _load_multiple_embeddings(self, qwen_file: str, qwen_file3: str, llm2vec_file: str, clmbr_file: str, bioclinicalbert_file: str, qwenclmbrcodes_file: str) -> pd.DataFrame:
         """
         Load embeddings from multiple files and merge them.
         
         Args:
             qwen_file: Path to the Qwen embeddings file.
             llm2vec_file: Path to the LLM2Vec embeddings file.
-            nvembed_file: Path to the NVEmbed embeddings file.
             clmbr_file: Path to the CLMBR embeddings file.
+            bioclinicalbert_file: Path to the bioclinicalbert embeddings file.
+            qwenclmbrcodes_file: Path to the qwenclmbrcodes embeddings file.
             
         Returns:
             DataFrame containing the merged embeddings.
         """
         # Load from individual files
-        embedding_df_qwen = pd.read_feather(qwen_file)
+        calc_all = False # only load qwen3 and clmbr embeddings
+        if(calc_all):
+            embedding_df_qwen = pd.read_feather(qwen_file)
+            embedding_df_llm2vec = pd.read_feather(llm2vec_file)
         embedding_df_qwen3 = pd.read_feather(qwen_file3)
-        embedding_df_llm2vec = pd.read_feather(llm2vec_file)
-        if(self.config["useNVEmbed"]):
-            embedding_df_nvembed = pd.read_feather(nvembed_file)
         embedding_df_clmbr = pd.read_feather(clmbr_file)
+        embedding_df_bioclinicalbert = pd.read_feather(bioclinicalbert_file)
+        embedding_df_qwenclmbrcodes = pd.read_feather(qwenclmbrcodes_file)
 
         # Convert to tensors and rename columns
-        embedding_df_qwen["q_reps_qwen"] = embedding_df_qwen["q_reps"].apply(lambda x: torch.tensor(x, dtype=torch.float32))
-        embedding_df_qwen.drop(columns=["q_reps"], inplace=True)
+        if(calc_all):
+            embedding_df_qwen["q_reps_qwen"] = embedding_df_qwen["q_reps"].apply(lambda x: torch.tensor(x, dtype=torch.float32))
+            embedding_df_qwen.drop(columns=["q_reps"], inplace=True)
+
+            embedding_df_llm2vec["q_reps_llm2vec"] = embedding_df_llm2vec["q_reps"].apply(lambda x: torch.tensor(x, dtype=torch.float32))
+            embedding_df_llm2vec.drop(columns=["q_reps"], inplace=True)
 
         embedding_df_qwen3["q_reps_qwen3"] = embedding_df_qwen3["q_reps"].apply(lambda x: torch.tensor(x, dtype=torch.float32))
         embedding_df_qwen3.drop(columns=["q_reps"], inplace=True)
         
-        embedding_df_llm2vec["q_reps_llm2vec"] = embedding_df_llm2vec["q_reps"].apply(lambda x: torch.tensor(x, dtype=torch.float32))
-        embedding_df_llm2vec.drop(columns=["q_reps"], inplace=True)
-        
-        if(self.config["useNVEmbed"]):
-            embedding_df_nvembed["q_reps_nvembed"] = embedding_df_nvembed["q_reps"].apply(lambda x: torch.tensor(x, dtype=torch.float32))
-            embedding_df_nvembed.drop(columns=["q_reps"], inplace=True)
-        
         embedding_df_clmbr["q_reps_clmbr"] = embedding_df_clmbr["q_reps"].apply(lambda x: torch.tensor(x, dtype=torch.float32))
         embedding_df_clmbr.drop(columns=["q_reps"], inplace=True)
 
+        embedding_df_bioclinicalbert["q_reps_bioclinicalbert"] = embedding_df_bioclinicalbert["q_reps"].apply(lambda x: torch.tensor(x, dtype=torch.float32))
+        embedding_df_bioclinicalbert.drop(columns=["q_reps"], inplace=True)
+
+        embedding_df_qwenclmbrcodes["q_reps_qwenclmbrcodes"] = embedding_df_qwenclmbrcodes["q_reps"].apply(lambda x: torch.tensor(x, dtype=torch.float32))
+        embedding_df_qwenclmbrcodes.drop(columns=["q_reps"], inplace=True)
+
         # Merge dataframes
-        embedding_df = pd.merge(embedding_df_qwen, embedding_df_llm2vec, on='eid', how='inner')
-        embedding_df = pd.merge(embedding_df, embedding_df_qwen3, on='eid', how='inner')
-        if(self.config["useNVEmbed"]):
-            embedding_df = pd.merge(embedding_df, embedding_df_nvembed, on='eid', how='inner')
-        embedding_df = pd.merge(embedding_df, embedding_df_clmbr, on='eid', how='inner')
-        
+        if(calc_all):
+            embedding_df = pd.merge(embedding_df_qwen, embedding_df_llm2vec, on='eid', how='inner')
+            embedding_df = pd.merge(embedding_df, embedding_df_qwen3, on='eid', how='inner')
+            embedding_df = pd.merge(embedding_df, embedding_df_clmbr, on='eid', how='inner')
+            embedding_df = pd.merge(embedding_df, embedding_df_bioclinicalbert, on='eid', how='inner')
+            embedding_df = pd.merge(embedding_df, embedding_df_qwenclmbrcodes, on='eid', how='inner')
+        else:
+            embedding_df = pd.merge(embedding_df_qwen3, embedding_df_clmbr, on='eid', how='inner')
+            embedding_df = pd.merge(embedding_df, embedding_df_bioclinicalbert, on='eid', how='inner')
+            embedding_df = pd.merge(embedding_df, embedding_df_qwenclmbrcodes, on='eid', how='inner')
+
         # Select only the necessary columns
-        columns = ["eid", "q_reps_qwen", "q_reps_qwen3", "q_reps_llm2vec", "q_reps_clmbr"]
-        if(self.config["useNVEmbed"]):
-            columns.append("q_reps_nvembed")
+        if(calc_all):
+            columns = ["eid", "q_reps_qwen", "q_reps_qwen3", "q_reps_llm2vec", "q_reps_clmbr", "q_reps_bioclinicalbert", "q_reps_qwenclmbrcodes"]
+        else:
+            columns = ["eid", "q_reps_qwen3", "q_reps_clmbr", "q_reps_bioclinicalbert", "q_reps_qwenclmbrcodes"]
         embedding_df = embedding_df[columns]
         
         return embedding_df
 
 
 # For convenience, create a function to get embeddings
-def process_embeddings(prepared_records, config, **kwargs):
+def process_embeddings(prepared_records, config, instruction, **kwargs):
     """
     Process embeddings based on the specified model and settings.
     
@@ -413,5 +427,5 @@ def process_embeddings(prepared_records, config, **kwargs):
     Returns:
         DataFrame containing the processed embeddings.
     """
-    processor = EmbeddingProcessor(config)
+    processor = EmbeddingProcessor(config, instruction)
     return processor.process_embeddings(prepared_records, kwargs)
