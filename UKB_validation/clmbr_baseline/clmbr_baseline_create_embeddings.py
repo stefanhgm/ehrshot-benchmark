@@ -53,7 +53,6 @@ if(Calculate_MEDS_format_only):
     ## Read in own data
     data_path = pathlib.Path(
         "/sc-projects/sc-proj-ukb-cvd/data/3_datasets_post/231012_ukb_preprocessing/ukb_data_portal/2_final"
-        #"/sc-projects/sc-proj-ukb-cvd/data/3_datasets_post/240625_ukb_preprocessing/ukb_data_portal/2_final/"
     )
 
     covariates_path = data_path / "baseline_covariates_231016.feather"
@@ -62,10 +61,6 @@ if(Calculate_MEDS_format_only):
 
     clmbr_UKB_mapping_complete_path = "/sc-projects/sc-proj-ukb-cvd/projects/llm2vec/data/filtered_records_mapped_clmbrwithnames.feather"
     clmbr_UKB_mapping_complete = pd.read_feather(clmbr_UKB_mapping_complete_path)
-
-    # 1000048
-
-    #clmbr_UKB_mapping_complete = clmbr_UKB_mapping_complete.iloc[0:1000]
 
     ## convert ethnicity to clmbr format
     data_ethnicity_to_clmbr = {
@@ -279,7 +274,6 @@ else:
         df.to_feather(batch_file)
         batch_count += 1
 
-        #df.to_csv(output_path_csv, mode='a', index=False)
            
 
 
@@ -295,11 +289,6 @@ else:
         os.remove(f)
     os.rmdir(temp_dir)
 
-    # final_results = combine_results(results)
-    # final_results["q_reps"] = final_results["q_reps"].apply(lambda x: x.tolist())
-    # #print(final_results)
-
-    # final_results.to_feather()
 
 
 
