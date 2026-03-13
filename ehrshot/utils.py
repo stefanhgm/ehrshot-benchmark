@@ -41,6 +41,10 @@ MODEL_2_INFO: Dict[str, Dict[str, Any]] = {
         'label' : 'LLM2Vec-Llama-3.1-8B',
         'heads' : ['lr_lbfgs', ],
     },
+    'llm-bert' : {
+        'label' : 'BioClinicalBERT',
+        'heads' : ['lr_lbfgs', ],
+    },
 }
 
 # Map each base model to a set of heads to test
@@ -79,6 +83,9 @@ SCORE_MODEL_HEAD_2_COLOR = {
         'llm_llama' : {
             'lr_lbfgs' : 'tab:green',
         },
+        'llm-bert' : {
+            'lr_lbfgs' : 'tab:purple',
+        },
         'agr' : {
             'lr_lbfgs' : 'tab:brown',
         },
@@ -101,6 +108,9 @@ SCORE_MODEL_HEAD_2_COLOR = {
         'llm_llama' : {
             'lr_lbfgs' : 'tab:green',
         },
+        'llm-bert' : {
+            'lr_lbfgs' : 'tab:purple',
+        },
         'agr' : {
             'lr_lbfgs' : 'tab:brown',
         },
@@ -122,6 +132,9 @@ SCORE_MODEL_HEAD_2_COLOR = {
         },
         'llm_llama' : {
             'lr_lbfgs' : 'tab:green',
+        },
+        'llm-bert' : {
+            'lr_lbfgs' : 'tab:purple',
         },
         'agr' : {
             'lr_lbfgs' : 'tab:brown',
