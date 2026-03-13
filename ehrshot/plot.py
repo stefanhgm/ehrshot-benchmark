@@ -4,6 +4,8 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
+
+from torchgen import model
 from utils import (
     LABELING_FUNCTION_2_PAPER_NAME,
     HEAD_2_INFO,
@@ -25,14 +27,17 @@ def _plot_unified_legend(fig, axes, ncol=None, fontsize=8):
     legend_n_col: int = len([x for x in labels if '(Full)' not in x]) if ncol is None else ncol
     
     # Create grouped legends by model type
-    model_types = {'LLM': [], 'CLIMBR': [], 'BERT': []}
+# Create grouped legends by model type (dict order = legend order)
+    model_types = {'LLM': [], 'BERT': [], 'CLIMBR': [], 'Other': []}
     for label in labels:
-        if 'clmbr' in label.lower():
-            model_types['CLIMBR'].append(label)
-        elif any(llm in label.lower() for llm in ['llm', 'gpt', 'qwen']):
+        if any(llm in label.lower() for llm in ['llm', 'gpt', 'qwen']):
             model_types['LLM'].append(label)
-        else:
+        elif any(bert in label.lower() for bert in ['bert', 'bioclinical']):
             model_types['BERT'].append(label)
+        elif 'clmbr' in label.lower():
+            model_types['CLIMBR'].append(label)
+        else:
+            model_types['Other'].append(label)
     
     # Create legend with grouped models
     all_labels = []
@@ -127,7 +132,10 @@ def plot_one_labeling_function(df: pd.DataFrame,
         'score' : 'first',
     }).reset_index(drop = True)
 
-    models: List[str] = df['model'].unique().tolist()
+    # models: List[str] = df['model'].unique().tolist()
+    # Define desired plot order (first = back, last = front)
+    model_order = ['count', 'clmbr', 'llm-bert', 'llm']
+    models: List[str] = sorted(df['model'].unique().tolist(), key=lambda m: model_order.index(m) if m in model_order else len(model_order))
     for m_idx, model in enumerate(models):
         heads: List[str] = df[df['model'] == model]['head'].unique().tolist()
         for h_idx, head in enumerate(heads):
@@ -154,7 +162,7 @@ def plot_one_labeling_function(df: pd.DataFrame,
 
             # Plot average line across all subtasks with improved styling
             df_ = df_means_.groupby(['k']).agg({'value': 'mean', 'k': 'first'}).reset_index(drop=True)
-            marker = 'o' if 'clmbr' in model.lower() else ('X' if 'llm' in model.lower() else 'p')
+            marker = 'o' if 'clmbr' in model.lower() else ('^' if 'llm-bert' in model.lower() else ('X' if 'llm' in model.lower() else 'p'))
             ax.plot(df_['k'], df_['value'], color=color, 
                    label=f'{model_name}+{head_name}',
                    linestyle='-', marker=marker, 
@@ -258,7 +266,10 @@ def plot_one_task_group(df: pd.DataFrame,
         'score' : 'first',
     }).reset_index(drop = True)
 
-    models: List[str] = df['model'].unique().tolist()
+    # models: List[str] = df['model'].unique().tolist()
+    # Define desired plot order (first = back, last = front)
+    model_order = ['count', 'clmbr', 'llm-bert', 'llm']
+    models: List[str] = sorted(df['model'].unique().tolist(), key=lambda m: model_order.index(m) if m in model_order else len(model_order))
     for m_idx, model in enumerate(models):
         heads: List[str] = df[df['model'] == model]['head'].unique().tolist()
         for h_idx, head in enumerate(heads):
@@ -277,7 +288,7 @@ def plot_one_task_group(df: pd.DataFrame,
     
             # Plot average line per model with improved styling
             df_ = df_means_.groupby(['k']).agg({'value': 'mean', 'k': 'first'}).reset_index(drop=True)
-            marker = 'o' if 'clmbr' in model.lower() else ('X' if 'llm' in model.lower() else 'p')
+            marker = 'o' if 'clmbr' in model.lower() else ('^' if 'llm-bert' in model.lower() else ('X' if 'llm' in model.lower() else 'p'))
             ax.plot(df_['k'], df_['value'], color=color, 
                    label=f'{model_name}+{head_name}',
                    linestyle='-', marker=marker, 
