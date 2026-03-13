@@ -9,17 +9,15 @@ cd $CODE_DIR
 # List of diseases from medical history paper
 diseases=(
     ### Hospitalization
-    #"hospitalization,admin_hospital"   
     "hospitalization,OMOP_9201"   
 
     ### Death
-    #"death,admin_death"
     "death,OMOP_4306655"
 
     # ### Medical hisotry diseases
     "Hypertension,phecode_CV_401"
     "Diabetes mellitus,phecode_EM_202"
-    "Atrial fibrillation,phecode_CV_416.21", #  "Atrial fibrillation"
+    "Atrial fibrillation,phecode_CV_416.21", 
     "Pneumonia,phecode_RE_468"
     "Chronic obstructive pulmonary disease [COPD],phecode_RE_474"
     "Chronic kidney disease,phecode_GU_582.2"
@@ -29,7 +27,6 @@ diseases=(
     "Cerebral infarction [Ischemic stroke],phecode_CV_431.11"
     "Heart failure,phecode_CV_424"
     "Cardiac arrest,phecode_CV_420"
-    #'OMOP_4306655', #  "All-Cause Death", # intervention
 
     "Abdominal aortic aneurysm,phecode_CV_438.11"
     "Pulmonary embolism,phecode_CV_440.3"
@@ -75,7 +72,7 @@ for entry in "${diseases[@]}"; do
         elif [ "$model" == "BioClinicalBERT" ]; then
             sbatch --export=ALL run_BERT.sh "$disease" "$phecode" "$minyears" "$maxyears" "$model" 
         elif [ "$model" == "runall" ]; then
-            sbatch --export=ALL run_inference.sh "$disease" "$phecode" "$minyears" "$maxyears" "$model" #"$num_PCA" "$queryinclusion" "$dateinclusion" "$dataset_to_use"
+            sbatch --export=ALL run_inference.sh "$disease" "$phecode" "$minyears" "$maxyears" "$model" 
         fi
     done
 done

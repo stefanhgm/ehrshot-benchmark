@@ -25,9 +25,6 @@ cd $CODE_DIR
 
 export HF_HOME=/sc-projects/sc-proj-dh-ag-eils-ml/shared_hf_cache
 
-#conda activate /sc-projects/sc-proj-ukb-cvd/environments/LLM2Vec
-#conda activate /sc-projects/sc-proj-ukb-cvd/environments/Qwen
-
 cmd="conda run -p /sc-projects/sc-proj-ukb-cvd/environments/LLM2Vec python3 ./LLM2Vec.py \
   --indication \"$disease\" \
   --phecode \"$phecode\" \

@@ -21,12 +21,7 @@ CODE_DIR=/home/gear11/Documents/LLM2Vec_project
 
 cd $CODE_DIR
 
-#source /home/gear11/.bashrc
-
 export HF_HOME=/sc-projects/sc-proj-dh-ag-eils-ml/shared_hf_cache
-
-#conda activate /sc-projects/sc-proj-ukb-cvd/environments/LLM2Vec
-#conda activate /sc-projects/sc-proj-ukb-cvd/environments/Qwen
 
 cmd="conda run -p /sc-projects/sc-proj-dh-ag-eils-ml/shared_envs/EHRSHOT_ENV_Georg python3 ./LLM2Vec.py \
   --indication \"$disease\" \

@@ -23,8 +23,6 @@ cd $CODE_DIR
 
 source ~/.bashrc
 
-#conda activate /sc-projects/sc-proj-ukb-cvd/environments/LLM2Vec
-#conda activate /sc-projects/sc-proj-dh-ag-eils-ml/shared_envs/EHRSHOT_ENV
 conda activate /sc-projects/sc-proj-dh-ag-eils-ml/shared_envs/EHRSHOT_ENV_Georg
 
 python3 ./LLM2Vec.py --indication "$disease" --phecode "$phecode" --model "$modelname" --minyears "$minyears" --maxyears "$maxyears" --infer_all --tokenlength 8192 #--clmbrcodes True 
