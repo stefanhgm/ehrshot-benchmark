@@ -87,88 +87,21 @@ def load_data(config):
   
     
     # Load records data based on configuration
-    if config['use_big_dataset']:
-        if(config['clmbrcodes']):
-            records_path = config['big_dataset_path_clmbr']
-        else:
-            records_path = config['big_dataset_path']
-        records_path_indications = config['big_dataset_path'] #to get indications from future
-    elif config['use_raw_dataset']:
-        records_path = config['raw_dataset_path']
-        records_path_indications = config['big_dataset_path'] #to get indications from future
+    if(config['clmbrcodes']):
+        records_path = config['big_dataset_path_clmbr']
     else:
         records_path = config['big_dataset_path']
     
     # Read data with appropriate transformations
-    if not config['use_raw_dataset']:
-        records_df = pd.read_feather(records_path) #.drop(columns=["Unnamed: 0"]).reset_index(drop=True)
-        
-        ## TODO: remove - just to speed up embedding calculation
-        #df = pd.read_feather(speed_filepath)
-        #records_df = records_df[~records_df["eid"].isin(df["eid"])]
-        
-        records_df["date"] = records_df["date"].astype(str)
-        records_df["recruitment_date"] = records_df["recruitment_date"].astype(str)
-        records_df["date"] = pd.to_datetime(records_df["date"])
-        records_df["recruitment_date"] = pd.to_datetime(records_df["recruitment_date"])
+    records_df = pd.read_feather(records_path) 
+    
+    # filter out records appearing after recruitment_date
+    records_df = records_df[records_df["date"] <= records_df["recruitment_date"]]
 
-
-        ## add endpoints - from before and after
-        records_indications = records_df.copy() #[records_df["date"] > records_df["recruitment_date"]]
-        #records_indications["date"] = records_indications["date"].astype(str)
-        #records_indications["recruitment_date"] = records_indications["recruitment_date"].astype(str)
-        #records_indications["ehr_class"] = np.nan
-
-        # filter out records appearing after recruitment_date
-        records_df = records_df[records_df["date"] <= records_df["recruitment_date"]]
-
-        records_df["date"] = records_df["date"].astype(str)
-        records_df["recruitment_date"] = records_df["recruitment_date"].astype(str)
-    else:
-        records_df = pd.read_feather(records_path) #already checked that only information from before recruitment date is present
-        records_df["date"] = records_df["date"].astype(str)
-        records_df["recruitment_date"] = records_df["recruitment_date"].astype(str)
-
-    # Filter out entries that have phecode as vocabulary
-    if(not config["clmbrcodes"] and not config["use_raw_dataset"]):
-        records_df = records_df[records_df.vocabulary != "phecode"]
-
-    if(config["use_big_dataset"]):
-        # add new column for different EHR classes - Conditions, Medications, Procedures
-        # first, similar to ehrshot approach, change CVX codes to Procedures
-        records_df.loc[records_df['vocabulary_id'] == 'CVX', 'domain_id'] = 'Observation'
-        records_df["ehr_class"] = records_df["domain_id"].apply(lambda x:  "Medications" if x in ["Drug"] else "Procedures" if x in ["Procedure", "Measurement"] else "Conditions")
-        #records_df["ehr_class"].value_counts()
-
-        # records_indications = pd.read_feather(records_path_indications, columns=["eid", "date", "concept_name", "concept_id", "recruitment_date"])
-        # # keep information about patients that have disease before recruitment date
-
-
-        patients_future = records_indications[records_indications["date"] >= records_indications["recruitment_date"]]["eid"].unique() #patients with information after recruitment date
-        #records_indications = patients_future[patients_future["concept_id"] == config["selected_phecode"]]
-        records_indications = records_indications[records_indications["concept_id"] == config["selected_phecode"]]
-        records_indications["date"] = records_indications["date"].astype(str)
-        records_indications["recruitment_date"] = records_indications["recruitment_date"].astype(str)
-        records_indications["ehr_class"] = np.nan
-        records_df = pd.concat([records_df, records_indications], axis=0)
-    else:
-        if(config["use_raw_dataset"]):
-            records_indications = pd.read_feather(records_path_indications, columns=["eid", "date", "concept_name", "concept_id", "recruitment_date", "code", "vocabulary_id"])
-            patients_future = records_indications[records_indications["date"] >= records_indications["recruitment_date"]]["eid"].unique() #patients with information after recruitment date
-            #records_indications = records_indications[(records_indications["date"] >= records_indications["recruitment_date"]) & (records_indications["concept_id"] == config["selected_phecode"])]
-            records_indications = records_indications[records_indications["concept_id"] == config["selected_phecode"]] #also keep information about patients that have disease before recruitment date
-            records_indications["date"] = records_indications["date"].astype(str)
-            records_indications["recruitment_date"] = records_indications["recruitment_date"].astype(str)
-            records_indications["ehr_class"] = np.nan
-            records_df = pd.concat([records_df, records_indications], axis=0)
-        else:
-            patients_future = []
-
-    length_of_stay_df = pd.read_feather(config['length_of_stay_path'])
-    length_of_stay_df["date"] = pd.to_datetime(length_of_stay_df["date"])
-    length_of_stay_df["date"] = length_of_stay_df["date"].dt.date
+    records_df["date"] = records_df["date"].dt.strftime("%Y-%m-%d")
+    records_df["recruitment_date"] = records_df["recruitment_date"].dt.strftime("%Y-%m-%d")
 
     # Filter records to match demographic data
     records_df = records_df[records_df["eid"].isin(demographics_df["eid"])]
     
-    return records_df, demographics_df, length_of_stay_df, patients_future
+    return records_df, demographics_df 
