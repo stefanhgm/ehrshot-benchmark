@@ -1,9 +1,9 @@
 #!/bin/bash
 #SBATCH -t 48:00:00
-#SBATCH --partition=gpu
-#SBATCH --gpus=1
-#SBATCH --mem=200000
-#SBATCH --job-name=QWEN2
+#SBATCH --partition=pgpu
+#SBATCH --gpus=2
+#SBATCH --mem=200GB
+#SBATCH --job-name=BioBERT
 #SBATCH -e /home/gear11/logs/job_%j.err
 #SBATCH -o /home/gear11/logs/job_%j.out
 
@@ -28,18 +28,17 @@ export HF_HOME=/sc-projects/sc-proj-dh-ag-eils-ml/shared_hf_cache
 #conda activate /sc-projects/sc-proj-ukb-cvd/environments/LLM2Vec
 #conda activate /sc-projects/sc-proj-ukb-cvd/environments/Qwen
 
-cmd="conda run -p /sc-projects/sc-proj-ukb-cvd/environments/LLM2Vec python3 ./LLM2Vec.py \
+cmd="conda run -p /sc-projects/sc-proj-dh-ag-eils-ml/shared_envs/EHRSHOT_ENV_Georg python3 ./LLM2Vec.py \
   --indication \"$disease\" \
   --phecode \"$phecode\" \
   --model \"$modelname\" \
   --minyears \"$minyears\" \
   --maxyears \"$maxyears\" \
-  --batch_size 5 \
   --calculate_embeddings \
   --tokenlength 8192" #\
   #--keep_all_codes" #\
+  # --clmbrcodes True \
   #--disable_wandb"
-  #--clmbrcodes
 
 echo "Running command: $cmd"
 eval $cmd

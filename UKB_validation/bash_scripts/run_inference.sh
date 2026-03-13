@@ -1,9 +1,8 @@
 #!/bin/bash
 #SBATCH -t 48:00:00
-#SBATCH --partition=gpu
-#SBATCH --gres=shard:1
-#SBATCH --mem=100000
-#SBATCH -N 1
+#SBATCH --partition=compute
+#SBATCH --mem=300GB
+#SBATCH --cpus-per-task=32
 #SBATCH -e /home/gear11/logs/job_%j.err
 #SBATCH -o /home/gear11/logs/job_%j.out
 
@@ -13,24 +12,19 @@ phecode="$2"
 minyears="$3"
 maxyears="$4"
 modelname="$5"
-num_PCA="$6"
-queryinclusion="$7"
-dateinclusion="$8"
-dataset="$9"
-
-# Modify job name dynamically
-#SBATCH --job-name="LLM2Vec-${phecode}-${minyears}-${maxyears}"
 
 
 # Run the program (replace "your_program" with the actual command)
 echo "Running program for disease: $disease with phecode: $phecode"
 
-CODE_DIR=~/Documents/ehrshot-benchmark/UKB_validation
+CODE_DIR=~/Documents/LLM2Vec_project
 
 cd $CODE_DIR
 
 source ~/.bashrc
 
-conda activate /sc-projects/sc-proj-ukb-cvd/environments/LLM2Vec
+#conda activate /sc-projects/sc-proj-ukb-cvd/environments/LLM2Vec
+#conda activate /sc-projects/sc-proj-dh-ag-eils-ml/shared_envs/EHRSHOT_ENV
+conda activate /sc-projects/sc-proj-dh-ag-eils-ml/shared_envs/EHRSHOT_ENV_Georg
 
-python3 ./LLM2Vec.py --includequeries "$queryinclusion" --indication "$disease" --phecode "$phecode" --model "$modelname" --minyears "$minyears" --maxyears "$maxyears" --ehr_format --batch_size 10 --include_dates "$dateinclusion" --withPCA "$num_PCA" "$dataset" --infer_all --diseaseunspecific #this is not balanced inference!!
+python3 ./LLM2Vec.py --indication "$disease" --phecode "$phecode" --model "$modelname" --minyears "$minyears" --maxyears "$maxyears" --infer_all --tokenlength 8192 #--clmbrcodes True 

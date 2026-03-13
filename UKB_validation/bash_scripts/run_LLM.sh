@@ -4,7 +4,6 @@
 #SBATCH --gpus=1
 #SBATCH --mem=200000
 #SBATCH --job-name=LLM2Vec
-#SBATCH -N 1
 #SBATCH -e /home/gear11/logs/job_%j.err
 #SBATCH -o /home/gear11/logs/job_%j.out
 
@@ -14,17 +13,11 @@ phecode="$2"
 minyears="$3"
 maxyears="$4"
 modelname="$5"
-num_PCA="$6"
-queryinclusion="$7"
-dateinclusion="$8"
-dataset="$9"
-start="${10}"
-end="${11}"
 
 # Run the program (replace "your_program" with the actual command)
 echo "Running program for disease: $disease with phecode: $phecode"
 
-CODE_DIR=/home/gear11/Documents/ehrshot-benchmark/UKB_validation
+CODE_DIR=/home/gear11/Documents/LLM2Vec_project
 
 cd $CODE_DIR
 
@@ -32,4 +25,4 @@ source /home/gear11/.bashrc
 
 conda activate /sc-projects/sc-proj-ukb-cvd/environments/LLM2Vec
 
-python3 ./LLM2Vec.py --includequeries "$queryinclusion" --indication "$disease" --phecode "$phecode" --model "$modelname" --minyears "$minyears" --maxyears "$maxyears" --ehr_format True --batch_size 5 --include_dates "$dateinclusion" --withPCA "$num_PCA" --diseaseunspecific "$dataset" --save_embeddings --calculate_embeddings --tokenlength 8192 --start $start --end $end --disable_wandb #--clmbrcodes
+python3 ./LLM2Vec.py --indication "$disease" --phecode "$phecode" --model "$modelname" --minyears "$minyears" --maxyears "$maxyears" --batch_size 5 --calculate_embeddings --tokenlength 8192 
