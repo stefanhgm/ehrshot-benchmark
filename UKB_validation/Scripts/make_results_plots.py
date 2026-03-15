@@ -58,7 +58,12 @@ def plot_all_labeling_functions(df_results: pd.DataFrame,
                                     path_to_output_dir=path_to_output_dir,
                                     model_heads=model_heads,
                                     is_x_scale_log=is_x_scale_log,
-                                    is_std_bars=False if labeling_function == 'chexpert' else is_std_bars)
+                                    is_std_bars=False if labeling_function == 'chexpert' else is_std_bars,
+                                    change_legend=False)
+
+    # Remove unused subplots
+    for j in range(len(labeling_functions), len(axes.flat)):
+        fig.delaxes(axes.flat[j])
 
     # Enhanced plot aesthetics
     fig.suptitle(f'{score.upper()} by Task', fontsize=12, fontweight='bold')
@@ -77,7 +82,9 @@ def plot_all_task_groups(df_results: pd.DataFrame,
                         score: str, 
                         path_to_output_dir: str,
                         model_heads: Optional[List[Tuple[str, str]]] = None,
-                        is_x_scale_log: bool = True):
+                        is_x_scale_log: bool = True,
+                        shadedregion: bool = True,
+                        addlinesdiagnoses: bool = True):
     # Set style configuration
     plt.style.use('seaborn-v0_8-paper')
     plt.rcParams.update({
@@ -104,10 +111,22 @@ def plot_all_task_groups(df_results: pd.DataFrame,
                             score,
                             path_to_output_dir=path_to_output_dir,
                             model_heads=model_heads,
-                            is_x_scale_log=is_x_scale_log)
+                            is_x_scale_log=is_x_scale_log,
+                            shadedregion=shadedregion,
+                            addlinesdiagnoses=addlinesdiagnoses)
+        # Added Mean scores for task groups
+        if score == 'brier':
+            axes.flat[idx].set_ylabel("Mean Brier")
+        else:
+            axes.flat[idx].set_ylabel(f"Mean {score.upper()}")
+
+    
+    # Remove unused subplots
+    for j in range(len(task_groups), len(axes.flat)):
+        fig.delaxes(axes.flat[j])
     
     # Enhanced plot aesthetics
-    fig.suptitle(f'{score.upper()} by Task Group', 
+    fig.suptitle(f'Mean {score.upper()} by Task Group', 
                  fontsize=16, fontweight='bold')
     
     # Create a unified legend for the entire figure
@@ -120,6 +139,141 @@ def plot_all_task_groups(df_results: pd.DataFrame,
                 dpi=300, bbox_inches='tight')
     plt.close('all')
     return fig
+
+def plot_sensitivity_analysis(df_results: pd.DataFrame, 
+                        score: str, 
+                        path_to_output_dir: str,
+                        model_heads: Optional[List[Tuple[str, str]]] = None,
+                        is_x_scale_log: bool = True,
+                        shadedregion: bool = True,
+                        addlinesdiagnoses: bool = False):
+    # Set style configuration
+    plt.style.use('seaborn-v0_8-paper')
+    plt.rcParams.update({
+        'font.size': 10,
+        'axes.titlesize': 12,
+        'axes.labelsize': 10,
+        'xtick.labelsize': 8,
+        'ytick.labelsize': 8,
+        'legend.fontsize': 8,
+        'figure.dpi': 300,
+        'lines.linewidth': 1.5,
+        'axes.grid': True,
+        'grid.alpha': 0.3
+    })
+    
+    # Create figure with A4 size and constrained layout
+    fig, axes = plt.subplots(2, 2, figsize=(8.27, 6), constrained_layout=True)  # A4 size (210mm × )
+    task_groups: List[str] = list(TASK_GROUP_2_LABELING_FUNCTION.keys())
+
+    for idx, task_group in enumerate(task_groups):
+        plot_one_task_group(df_results, 
+                            axes.flat[idx], 
+                            task_group, 
+                            score,
+                            path_to_output_dir=path_to_output_dir,
+                            model_heads=model_heads,
+                            is_x_scale_log=is_x_scale_log,
+                            shadedregion=shadedregion,
+                            addlinesdiagnoses=addlinesdiagnoses)
+        # Added Mean scores for task groups
+        if score == 'brier':
+            axes.flat[idx].set_ylabel("Mean Brier")
+        else:
+            axes.flat[idx].set_ylabel(f"Mean {score.upper()}")
+
+    # also plot mean scores for all task groups combined in the last subplot
+    plot_one_task_group(df_results,
+                        axes.flat[-1],
+                        "mean_all_task_groups",
+                        score,
+                        path_to_output_dir=path_to_output_dir,
+                        model_heads=model_heads,
+                        is_x_scale_log=is_x_scale_log,
+                        shadedregion=shadedregion)
+
+    # Enhanced plot aesthetics
+    fig.suptitle(f'Mean {score.upper()} by Task Group', 
+                 fontsize=16, fontweight='bold')
+    
+    # Create a unified legend for the entire figure
+    _plot_unified_legend(fig, axes, fontsize=8)
+    
+    # Save as both PNG and PDF
+    plt.savefig(os.path.join(path_to_output_dir, f"sensitivity_analysis_{score}.png"), 
+                dpi=300, bbox_inches='tight')
+    plt.savefig(os.path.join(path_to_output_dir, f"sensitivity_analysis_{score}.pdf"), 
+                dpi=300, bbox_inches='tight')
+    plt.close('all')
+    return fig
+
+def plot_comparison(df_results: pd.DataFrame, 
+                        score: str, 
+                        path_to_output_dir: str,
+                        model_heads: Optional[List[Tuple[str, str]]] = None,
+                        is_x_scale_log: bool = True,
+                        shadedregion: bool = True):
+    # Set style configuration
+    plt.style.use('seaborn-v0_8-paper')
+    plt.rcParams.update({
+        'font.size': 10,
+        'axes.titlesize': 12,
+        'axes.labelsize': 10,
+        'xtick.labelsize': 8,
+        'ytick.labelsize': 8,
+        'legend.fontsize': 8,
+        'figure.dpi': 300,
+        'lines.linewidth': 1.5,
+        'axes.grid': True,
+        'grid.alpha': 0.3
+    })
+    
+    # Create figure with A4 size and constrained layout
+    fig, axes = plt.subplots(1, 2, figsize=(8.27, 3.2), constrained_layout=True)  # A4 size (210mm × )
+    task_groups: List[str] = list(TASK_GROUP_2_LABELING_FUNCTION.keys())
+
+    for idx, task_group in enumerate(["EHRSHOT", "UKB"]):
+        df_results_subset = df_results[df_results["labeling_function"] == task_group]
+        plot_one_task_group(df_results_subset, 
+                            axes.flat[idx], 
+                            task_group,
+                            score,
+                            path_to_output_dir=path_to_output_dir,
+                            model_heads=model_heads,
+                            is_x_scale_log=is_x_scale_log,
+                            shadedregion=shadedregion,
+                            addlinesdiagnoses=True)
+        # Added Mean scores for task groups
+        if score == 'brier':
+            axes.flat[idx].set_ylabel("Mean Brier")
+        else:
+            axes.flat[idx].set_ylabel(f"Mean {score.upper()}")
+
+    # # also plot mean scores for all task groups combined in the last subplot
+    # plot_one_task_group(df_results,
+    #                     axes.flat[-1],
+    #                     "Comparison_EHRSHOT_UKB",
+    #                     score,
+    #                     path_to_output_dir=path_to_output_dir,
+    #                     model_heads=model_heads,
+    #                     is_x_scale_log=is_x_scale_log,
+    #                     shadedregion=shadedregion)
+
+    # Enhanced plot aesthetics
+    fig.suptitle(f'Mean {score.upper()} by Task Group', 
+                 fontsize=16, fontweight='bold')
+    
+    # Create a unified legend for the entire figure
+    _plot_unified_legend(fig, axes, fontsize=8)
+    
+    # Save as both PNG and PDF
+    plt.savefig(os.path.join(path_to_output_dir, f"comparison_EHRSHOT_UKB_{score}.png"), 
+                dpi=300, bbox_inches='tight')
+    plt.savefig(os.path.join(path_to_output_dir, f"comparison_EHRSHOT_UKB_{score}.pdf"), 
+                dpi=300, bbox_inches='tight')
+    plt.close('all')
+    return fig
+
 
 def plot_all_task_group_box_plots(df_results: pd.DataFrame,
                                  score: str, 
@@ -155,7 +309,7 @@ def plot_all_task_group_box_plots(df_results: pd.DataFrame,
     
     # Create a unified legend grouped by model type
     df_ = filter_df(df_results, score=score, model_heads=model_heads)
-    model_types = {'CLIMBR': [], 'LLM': [], 'BERT': []}
+    model_types = {'LLM': [], 'CLMBR': [], 'BERT': []}
     
     # Group models by type
     for model, head in df_[['model', 'head']].drop_duplicates().itertuples(index=False):
@@ -166,7 +320,7 @@ def plot_all_task_group_box_plots(df_results: pd.DataFrame,
             label=label
         )
         if 'clmbr' in model.lower():
-            model_types['CLIMBR'].append(patch)
+            model_types['CLMBR'].append(patch)
         elif any(llm in model.lower() for llm in ['llm', 'gpt', 'qwen']):
             model_types['LLM'].append(patch)
         else:
@@ -245,7 +399,7 @@ def plot_radar_chart(df_results: pd.DataFrame, k: int, path_to_output_dir: str, 
             return "EHR Foundation Model"
         elif model_head == "Count-based+GBM":
             return "Counts Baseline"
-        elif model_head == "GTE Qwen2 7B+LR":
+        elif model_head == "Qwen3-Emb-8B+LR":
             return "LLM Encoder"
         return model_head
     
@@ -568,25 +722,23 @@ if __name__ == "__main__":
 
     print("Plotting Models: ", MODEL_HEADS)
 
-    # Plotting individual AUROC/AUPRC plot for each labeling function
+    # Plotting individual AUROC/AUPRC/BRIER plot for each labeling function
     for score in tqdm(df_results['score'].unique(), desc='plot_all_labeling_functions()'):
-        if score == 'brier': continue
         plot_all_labeling_functions(df_results, score, PATH_TO_OUTPUT_DIR, 
                                     model_heads=MODEL_HEADS, is_x_scale_log=True, is_std_bars=True)
 
-    # Plotting aggregated auroc and auprc plots by task groups
+    # Plotting aggregated auroc/auprc/brier plots by task groups
     for score in tqdm(df_results['score'].unique(), desc='plot_all_task_groups()'):
-        if score == 'brier': continue
         plot_all_task_groups(df_results, score, path_to_output_dir=PATH_TO_OUTPUT_DIR, 
                              model_heads=MODEL_HEADS, is_x_scale_log=True)
 
-    # plotting aggregated auroc and auprc box plots by task groups
+    # plotting aggregated auroc and auprc box plots by task groups (still skip brier)
     for score in tqdm(df_results['score'].unique(), desc='plot_all_task_group_box_plots()'):
         if score == 'brier': continue
         plot_all_task_group_box_plots(df_results, score, path_to_output_dir=PATH_TO_OUTPUT_DIR,
                                       model_heads=MODEL_HEADS)
                                       
-    # Generate radar plots for different k values and scores
+    # Generate radar plots for different k values and scores (still skip brier)
     k_values = [8, 16, 32, 128] 
     for score in tqdm(df_results['score'].unique(), desc='plot_radar_charts()'):
         if score == 'brier': continue
