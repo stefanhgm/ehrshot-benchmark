@@ -62,11 +62,11 @@ MODEL_2_INFO: Dict[str, Dict[str, Any]] = {
     #     'heads' : ['lr_lbfgs', ],
     # },
     'bioclinicalbert' : {
-        'label' : 'bioclinicalbert', # 'BioClinicalBERT',
+        'label' : 'BioClinicalBERT', # 'BioClinicalBERT',
         'heads' : ['lr_lbfgs', ],
     },
     'qwenclmbrcodes' : {
-        'label' : 'qwenclmbrcodes', # 'Qwen3-Emb-8B + CLMBR Codes',
+        'label' : 'Qwen3-Emb-8B clmbrsubset', # 'Qwen3-Emb-8B + CLMBR Codes',
         'heads' : ['lr_lbfgs', ],
     }
 }
@@ -109,7 +109,10 @@ TASK_GROUP_2_LABELING_FUNCTION = {
 TASK_GROUP_2_PAPER_NAME = {
     "Mortality Prediction": "Mortality Prediction",
     "Operational Outcomes": "Operational Outcomes",
-    "Assignment of New Diagnoses": "Assignment of New Diagnoses"
+    "Assignment of New Diagnoses": "Assignment of New Diagnoses",
+    "mean_all_task_groups": "Mean across all task groups",
+    "UKB": "UK Biobank",
+    "EHRSHOT": "EHRSHOT"
 }
 
 LABELING_FUNCTION_2_PAPER_NAME = {
@@ -165,10 +168,10 @@ HEAD_2_INFO: Dict[str, Dict[str, str]] = {
 SCORE_MODEL_HEAD_2_COLOR = {
     'auroc' : {
         'clmbr' : {
-            'lr_lbfgs' : 'tab:blue',
+            'lr_lbfgs' : 'tab:orange',
         },
         'count' : {
-            'gbm' : 'tab:red',
+            'gbm' : 'tab:green',
             'lr_lbfgs' : 'tab:green',
             'rf' : 'tab:orange',
         },
@@ -176,7 +179,7 @@ SCORE_MODEL_HEAD_2_COLOR = {
         #     'lr_lbfgs' : 'tab:purple',
         # },
         'qwen3' : {
-            'lr_lbfgs' : 'tab:orange',
+            'lr_lbfgs' : 'tab:blue',
         },
         # 'llm2vec' : {
         #     'lr_lbfgs' : 'tab:green',
@@ -185,7 +188,7 @@ SCORE_MODEL_HEAD_2_COLOR = {
             'lr_lbfgs' : 'tab:brown',
         },
         'bioclinicalbert' : {
-            'lr_lbfgs' : 'tab:pink',
+            'lr_lbfgs' : 'tab:purple',
         },
         'qwenclmbrcodes' : {
             'lr_lbfgs' : 'tab:gray',
@@ -193,15 +196,12 @@ SCORE_MODEL_HEAD_2_COLOR = {
     },
     'auprc' : {
         'clmbr' : {
-            'lr_lbfgs' : 'tab:blue',
+            'lr_lbfgs' : 'tab:orange',
         },
         'count' : {
-            'gbm' : 'tab:red',
+            'gbm' : 'tab:green',
             'lr_lbfgs' : 'tab:green',
             'rf' : 'tab:orange',
-        },
-        'pytorch_clmbr' : {
-            'lr_femr' : 'tab:purple',
         },
         'llm2vec' : {
             'lr_lbfgs' : 'tab:orange',
@@ -210,16 +210,41 @@ SCORE_MODEL_HEAD_2_COLOR = {
             'lr_lbfgs' : 'tab:purple',
         },
         'qwen3' : {
-            'lr_lbfgs' : 'tab:orange',
-        },
-        'llm_llama' : {
-            'lr_lbfgs' : 'tab:green',
+            'lr_lbfgs' : 'tab:blue',
         },
         'agr' : {
             'lr_lbfgs' : 'tab:brown',
         },
         'bioclinicalbert' : {
-            'lr_lbfgs' : 'tab:pink',
+            'lr_lbfgs' : 'tab:purple',
+        },
+        'qwenclmbrcodes' : {
+            'lr_lbfgs' : 'tab:gray',
+        }
+    },
+    'brier' : {
+        'clmbr' : {
+            'lr_lbfgs' : 'tab:orange',
+        },
+        'count' : {
+            'gbm' : 'tab:green',
+            'lr_lbfgs' : 'tab:green',
+            'rf' : 'tab:orange',
+        },
+        'llm2vec' : {
+            'lr_lbfgs' : 'tab:orange',
+        },
+        'qwen' : {
+            'lr_lbfgs' : 'tab:purple',
+        },
+        'qwen3' : {
+            'lr_lbfgs' : 'tab:blue',
+        },
+        'agr' : {
+            'lr_lbfgs' : 'tab:brown',
+        },
+        'bioclinicalbert' : {
+            'lr_lbfgs' : 'tab:purple',
         },
         'qwenclmbrcodes' : {
             'lr_lbfgs' : 'tab:gray',
