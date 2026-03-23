@@ -79,7 +79,7 @@ def run_evaluation(X_train: np.ndarray,
     X_train = X_train[train_shuffle_idx]
     y_train = y_train[train_shuffle_idx]
 
-    logger.critical(f"Start | Fitting {model_head}...")
+    logger.critical(f"Start | Fitting {model_head} with {n_jobs} jobs...")
     model_head_parts: List[str] = model_head.split("_")
     model_head_base: str = model_head_parts[0]
     if model_head_base == "gbm":
