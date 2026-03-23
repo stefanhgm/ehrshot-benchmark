@@ -29,7 +29,9 @@ if __name__ == "__main__":
 
     # TODO: Better way to do this than hardcoding path
     # Check if in experimental LLM setting, then only consider LLM models
-    if '/experiments/' in path_to_results_dir:
+    if 'count_' in path_to_results_dir:
+        model_heads = [(m, h) for m, h in model_heads if m == 'count']
+    elif '/experiments/' in path_to_results_dir:
         model_heads = [(m, h) for m, h in model_heads if m == 'llm']
 
     # If output file is provided, create dataframe to save results that can later be written into csv
