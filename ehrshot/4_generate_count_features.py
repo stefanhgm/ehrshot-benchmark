@@ -37,9 +37,19 @@ if __name__ == "__main__":
     # Combine two featurizations of each patient: one for the patient's age, and one for the count of every code
     # they've had in their record up to the prediction timepoint for each label
     age = AgeFeaturizer()
-    # count = CountFeaturizer(is_ontology_expansion=True, numeric_value_decile=True, string_value_combination=True)
-    # count = CountFeaturizer(is_ontology_expansion=True, numeric_value_decile=True, string_value_combination=True, time_bins = [datetime.timedelta(days=30), datetime.timedelta(days=180), datetime.timedelta(days=365), datetime.timedelta(days=99999)])
-    count = CountFeaturizer(is_ontology_expansion=True)
+    # Default simple count baseline only using ontology expansion
+    # count = CountFeaturizer(is_ontology_expansion=True)
+    # Best count baseline also using values and time bins
+    count = CountFeaturizer(is_ontology_expansion=True, numeric_value_decile=True, string_value_combination=True, time_bins = [datetime.timedelta(days=30), datetime.timedelta(days=180), datetime.timedelta(days=365), datetime.timedelta(days=99999)])
+
+    # Ablation studies for different time windows (-1 1 7 30 365 1095)
+    # count = CountFeaturizer(is_ontology_expansion=True, numeric_value_decile=True, string_value_combination=True, time_bins = [datetime.timedelta(days=30), datetime.timedelta(days=180), datetime.timedelta(days=365), datetime.timedelta(days=1095)])
+    # count = CountFeaturizer(is_ontology_expansion=True, numeric_value_decile=True, string_value_combination=True, time_bins = [datetime.timedelta(days=30), datetime.timedelta(days=180), datetime.timedelta(days=365)])
+    # count = CountFeaturizer(is_ontology_expansion=True, numeric_value_decile=True, string_value_combination=True, time_bins = [datetime.timedelta(days=30)])
+    # count = CountFeaturizer(is_ontology_expansion=True, numeric_value_decile=True, string_value_combination=True, time_bins = [datetime.timedelta(days=7)])
+    # count = CountFeaturizer(is_ontology_expansion=True, numeric_value_decile=True, string_value_combination=True, time_bins = [datetime.timedelta(days=1)])
+    # count = CountFeaturizer(is_ontology_expansion=True, numeric_value_decile=True, string_value_combination=True, time_bins = [datetime.timedelta(hours=1)])
+    
     featurizer_age_count = FeaturizerList([age, count])
 
     # Preprocessing the featurizers -- this includes processes such as normalizing age
