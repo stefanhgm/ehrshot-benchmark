@@ -46,6 +46,7 @@ def main(args):
         
         # Ensure some properties of the dataframes
         assert first_filtered_entries.columns.tolist() == second_filtered_entries.columns.tolist()
+        print(f"Joining results for {labeling_function} with {first_filtered_entries.shape[0]} entries from first source and {second_filtered_entries.shape[0]} entries from second source")
         assert first_filtered_entries.shape[0] / len(first_filter) == second_filtered_entries.shape[0] / len(second_filter)
         
         # Join results and write to output directory
