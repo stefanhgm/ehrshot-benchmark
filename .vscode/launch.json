@@ -193,15 +193,19 @@
                 // Combine baseline with qwen3
                 // "--first_source_dir", "~/ehrshot-benchmark/EHRSHOT_ASSETS_BASELINES/results_complete",
                 // "--first_source_filter", "count,gbm;clmbr,lr_lbfgs",
-                "--first_source_dir", "~/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run_codes_list/qwen3_embedding_8b_unique_codes_list_recent_8k_no_unres_3_0_full_with_baselines",
-                "--first_source_filter", "clmbr,lr_lbfgs;llm,lr_lbfgs",
+                // "--first_source_dir", "~/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run_codes_list/qwen3_embedding_8b_unique_codes_list_recent_8k_no_unres_3_0_full_with_baselines",
+                // "--first_source_filter", "clmbr,lr_lbfgs;llm,lr_lbfgs",
+                "--first_source_dir", "/home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run_codes_list/qwen3_embedding_8b_unique_codes_list_recent_8k_no_unres_3_0_full_with_baselines_new_counts",
+                "--first_source_filter", "clmbr,lr_lbfgs;llm,lr_lbfgs;count,gbm",
                 // "--second_source_dir", "/home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run/qwen3_embedding_8b_unique_then_list_visits_wo_allconds_w_values_no_labs_single_3_0_full",
                 // "--second_source_dir", "/home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/rerun_list/qwen3_embedding_8b_unique_events_list_recent_8k_no_labs_single_3_0_full/",
-                "--second_source_dir", "/home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run_codes_list/count_string_numeric_values_time_bins",
-                "--second_source_filter", "count,gbm",
+                // "--second_source_dir", "/home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run_codes_list/count_string_numeric_values_time_bins",
+                // "--second_source_filter", "count,gbm",
+                "--second_source_dir", "/home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run_codes_list/bioclinicalbert_unique_codes_list_recent_8k_no_unres_3_0_full_renamed",
+                "--second_source_filter", "llm-bert,lr_lbfgs",
                 // "--output_dir", "/home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run/qwen3_embedding_8b_unique_then_list_visits_wo_allconds_w_values_no_labs_single_3_0_full_with_baselines"
                 // "--output_dir", "/home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/rerun_list/qwen3_embedding_8b_unique_events_list_recent_8k_no_labs_single_3_0_full_with_baselines"
-                "--output_dir", "/home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run_codes_list/qwen3_embedding_8b_unique_codes_list_recent_8k_no_unres_3_0_full_with_baselines_new_counts"
+                "--output_dir", "/home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run_codes_list/qwen3_embedding_8b_unique_codes_list_recent_8k_no_unres_3_0_full_with_baselines_new_counts_bert"
             ]
         },
 
@@ -254,11 +258,38 @@
             "args": [
                 // EHRSHOT
                 "--comparisons",
-                "Qwen3:llm:lr_lbfgs:-1:/home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run_codes_list/qwen3_embedding_8b_unique_codes_list_recent_8k_no_unres_3_0_full copy|CLMBR:clmbr:lr_lbfgs:-1:/home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run_codes_list/clmbr_baseline copy",
-                "Qwen3:llm:lr_lbfgs:-1:/home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run_codes_list/qwen3_embedding_8b_unique_codes_list_recent_8k_no_unres_3_0_full copy|BioClinicalBert:llm:lr_lbfgs:-1:/home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run_codes_list/bioclinicalbert_unique_codes_list_recent_8k_no_unres_3_0_full",
+                "Qwen3:llm:lr_lbfgs:8:/home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run_codes_list/qwen3_embedding_8b_unique_codes_list_recent_8k_no_unres_3_0_full|CLMBR:clmbr:lr_lbfgs:8:/home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run_codes_list/clmbr_baseline",
+                "Qwen3:llm:lr_lbfgs:8:/home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run_codes_list/qwen3_embedding_8b_unique_codes_list_recent_8k_no_unres_3_0_full|BioClinicalBert:llm:lr_lbfgs:8:/home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run_codes_list/bioclinicalbert_unique_codes_list_recent_8k_no_unres_3_0_full",
+                "Qwen3:llm:lr_lbfgs:8:/home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run_codes_list/qwen3_embedding_8b_unique_codes_list_recent_8k_no_unres_3_0_full|Count-based:count:gbm:8:/home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run_codes_list/count_string_numeric_values_time_bins",
+                "Qwen3:llm:lr_lbfgs:64:/home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run_codes_list/qwen3_embedding_8b_unique_codes_list_recent_8k_no_unres_3_0_full|CLMBR:clmbr:lr_lbfgs:64:/home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run_codes_list/clmbr_baseline",
+                "Qwen3:llm:lr_lbfgs:64:/home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run_codes_list/qwen3_embedding_8b_unique_codes_list_recent_8k_no_unres_3_0_full|BioClinicalBert:llm:lr_lbfgs:64:/home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run_codes_list/bioclinicalbert_unique_codes_list_recent_8k_no_unres_3_0_full",
+                "Qwen3:llm:lr_lbfgs:64:/home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run_codes_list/qwen3_embedding_8b_unique_codes_list_recent_8k_no_unres_3_0_full|Count-based:count:gbm:64:/home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run_codes_list/count_string_numeric_values_time_bins",
+                "Qwen3:llm:lr_lbfgs:-1:/home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run_codes_list/qwen3_embedding_8b_unique_codes_list_recent_8k_no_unres_3_0_full|CLMBR:clmbr:lr_lbfgs:-1:/home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run_codes_list/clmbr_baseline",
+                "Qwen3:llm:lr_lbfgs:-1:/home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run_codes_list/qwen3_embedding_8b_unique_codes_list_recent_8k_no_unres_3_0_full|BioClinicalBert:llm:lr_lbfgs:-1:/home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run_codes_list/bioclinicalbert_unique_codes_list_recent_8k_no_unres_3_0_full",
+                "Qwen3:llm:lr_lbfgs:-1:/home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run_codes_list/qwen3_embedding_8b_unique_codes_list_recent_8k_no_unres_3_0_full|Count-based:count:gbm:-1:/home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/full_run_codes_list/count_string_numeric_values_time_bins",
+                "--ehrshot",
+                // UKBB
+                // "--comparisons",
+                // "Qwen3:qwen3:lr_lbfgs:8:/sc-projects/sc-proj-ukb-cvd/projects/llm2vec/Results_Revision3|CLMBR:clmbr:lr_lbfgs:8:/sc-projects/sc-proj-ukb-cvd/projects/llm2vec/Results_Revision3",
+                // "Qwen3:qwen3:lr_lbfgs:8:/sc-projects/sc-proj-ukb-cvd/projects/llm2vec/Results_Revision3|BioClinicalBERT:bioclinicalbert:lr_lbfgs:8:/sc-projects/sc-proj-ukb-cvd/projects/llm2vec/Results_Revision3",
+                // "Qwen3:qwen3:lr_lbfgs:8:/sc-projects/sc-proj-ukb-cvd/projects/llm2vec/Results_Revision3|Count-based:count:gbm:8:/sc-projects/sc-proj-ukb-cvd/projects/llm2vec/Results_Revision3",
+                // "Qwen3:qwen3:lr_lbfgs:64:/sc-projects/sc-proj-ukb-cvd/projects/llm2vec/Results_Revision3|CLMBR:clmbr:lr_lbfgs:64:/sc-projects/sc-proj-ukb-cvd/projects/llm2vec/Results_Revision3",
+                // "Qwen3:qwen3:lr_lbfgs:64:/sc-projects/sc-proj-ukb-cvd/projects/llm2vec/Results_Revision3|BioClinicalBERT:bioclinicalbert:lr_lbfgs:64:/sc-projects/sc-proj-ukb-cvd/projects/llm2vec/Results_Revision3",
+                // "Qwen3:qwen3:lr_lbfgs:64:/sc-projects/sc-proj-ukb-cvd/projects/llm2vec/Results_Revision3|Count-based:count:gbm:64:/sc-projects/sc-proj-ukb-cvd/projects/llm2vec/Results_Revision3",
+                // "Qwen3:qwen3:lr_lbfgs:-1:/sc-projects/sc-proj-ukb-cvd/projects/llm2vec/Results_Revision3|CLMBR:clmbr:lr_lbfgs:-1:/sc-projects/sc-proj-ukb-cvd/projects/llm2vec/Results_Revision3",
+                // "Qwen3:qwen3:lr_lbfgs:-1:/sc-projects/sc-proj-ukb-cvd/projects/llm2vec/Results_Revision3|BioClinicalBERT:bioclinicalbert:lr_lbfgs:-1:/sc-projects/sc-proj-ukb-cvd/projects/llm2vec/Results_Revision3",
+                // "Qwen3:qwen3:lr_lbfgs:-1:/sc-projects/sc-proj-ukb-cvd/projects/llm2vec/Results_Revision3|Count-based:count:gbm:-1:/sc-projects/sc-proj-ukb-cvd/projects/llm2vec/Results_Revision3",
+                // "--ukbb",
+                // UKBB sensitivity analysis
+                // "--comparisons",
+                // "Qwen3 CLMBR codes:qwenclmbrcodes:lr_lbfgs:8:/sc-projects/sc-proj-ukb-cvd/projects/llm2vec/Results_Revision3|CLMBR:clmbr:lr_lbfgs:8:/sc-projects/sc-proj-ukb-cvd/projects/llm2vec/Results_Revision3",
+                // "Qwen3 CLMBR codes:qwenclmbrcodes:lr_lbfgs:64:/sc-projects/sc-proj-ukb-cvd/projects/llm2vec/Results_Revision3|CLMBR:clmbr:lr_lbfgs:64:/sc-projects/sc-proj-ukb-cvd/projects/llm2vec/Results_Revision3",
+                // "Qwen3 CLMBR codes:qwenclmbrcodes:lr_lbfgs:-1:/sc-projects/sc-proj-ukb-cvd/projects/llm2vec/Results_Revision3|CLMBR:clmbr:lr_lbfgs:-1:/sc-projects/sc-proj-ukb-cvd/projects/llm2vec/Results_Revision3",
+                // "--ukbb",
+                // General
                 "--bootstrap", "10000",
                 "--seed", "0",
-                "--num_threads", "16",
+                "--num_threads", "25",
                 "--collapse_chexpert"
             ]
         },

@@ -4,7 +4,8 @@ Paired, patient-level bootstrap significance tests for ΔAUROC between two model
 from EHRSHOT all_probas.csv outputs.
 
 Expected structure:
-  <EXP_DIR>/<TASK>/all_probas.csv
+  EHRSHOT: <EXP_DIR>/<TASK>/all_probas.csv
+  UKBB:    <EXP_DIR>/<TaskName>_all_probas.csv  (all models in one file)
 
 Each all_probas.csv must have columns:
   patient_id,sub_task,model,head,replicate,k,label,proba
@@ -47,7 +48,11 @@ except Exception:
     tqdm = None
 
 
-TASKS_DEFAULT = [
+# ============================================================
+# EHRSHOT tasks
+# ============================================================
+
+TASKS_DEFAULT_EHRSHOT = [
     "guo_icu",
     "guo_los",
     "guo_readmission",
@@ -65,8 +70,7 @@ TASKS_DEFAULT = [
     "chexpert",
 ]
 
-# Canonical display order for printing results.
-TASK_DISPLAY_ORDER = [
+TASK_DISPLAY_ORDER_EHRSHOT = [
     "guo_los",
     "guo_readmission",
     "guo_icu",
@@ -84,20 +88,126 @@ TASK_DISPLAY_ORDER = [
     "chexpert",
 ]
 
-# Override for task display names (falls back to LABELING_FUNCTION_2_PAPER_NAME).
-TASK_DISPLAY_NAME_OVERRIDE = {
+TASK_DISPLAY_NAME_OVERRIDE_EHRSHOT = {
     "guo_icu": "ICU Transfer",
 }
 
 
+# ============================================================
+# UKBB tasks
+# ============================================================
+
+# Internal task keys (used for CLI, lookups, filtering).
+# These match the filename prefixes in the results directory.
+UKBB_TASKS_DEFAULT = [
+    "Hypertension",
+    "Diabetes mellitus",
+    "Atrial fibrillation",
+    "Pneumonia",
+    "Chronic obstructive pulmonary disease [COPD]",
+    "Chronic kidney disease",
+    "Ischemic heart disease",
+    "Myocardial infarction [Heart attack]",
+    "Cerebral infarction [Ischemic stroke]",
+    "Heart failure",
+    "Cardiac arrest",
+    "Abdominal aortic aneurysm",
+    "Pulmonary embolism",
+    "Aortic stenosis",
+    "Mitral valve insufficiency",
+    "Endocarditis",
+    "Rheumatic fever and chronic rheumatic heart diseases",
+    "Anemia",
+    "Back pain",
+    "Parkinson's disease (Primary)",
+    "Rheumatoid arthritis",
+    "Psoriasis",
+    "Suicide ideation and attempt or self harm",
+    "death",
+    "hospitalization",
+]
+
+TASK_DISPLAY_ORDER_UKBB = list(UKBB_TASKS_DEFAULT)  # same order
+
+# Display names for UKBB (key = internal task key, value = display name).
+UKBB_TASK_DISPLAY_NAMES: Dict[str, str] = {
+    "Hypertension": "Hypertension",
+    "Diabetes mellitus": "Diabetes Mellitus",
+    "Atrial fibrillation": "Atrial Fibrillation",
+    "Pneumonia": "Pneumonia",
+    "Chronic obstructive pulmonary disease [COPD]": "COPD",
+    "Chronic kidney disease": "Chronic Kidney Disease",
+    "Ischemic heart disease": "Ischemic Heart Disease",
+    "Myocardial infarction [Heart attack]": "Myocardial Infarction",
+    "Cerebral infarction [Ischemic stroke]": "Cerebral Infarction",
+    "Heart failure": "Heart Failure",
+    "Cardiac arrest": "Cardiac Arrest",
+    "Abdominal aortic aneurysm": "Abdominal Aortic Aneurysm",
+    "Pulmonary embolism": "Pulmonary Embolism",
+    "Aortic stenosis": "Aortic Stenosis",
+    "Mitral valve insufficiency": "Mitral Valve Insufficiency",
+    "Endocarditis": "Endocarditis",
+    "Rheumatic fever and chronic rheumatic heart diseases": "Rheumatic Fever",
+    "Anemia": "Anemia",
+    "Back pain": "Back Pain",
+    "Parkinson's disease (Primary)": "Parkinson's Disease",
+    "Rheumatoid arthritis": "Rheumatoid Arthritis",
+    "Psoriasis": "Psoriasis",
+    "Suicide ideation and attempt or self harm": "Suicide Ideation / Self Harm",
+    "death": "Death",
+    "hospitalization": "Hospitalization",
+}
+
+# Maximum k at which each UKBB task was evaluated (exclusive upper bound for
+# *few-shot* settings). Tasks not listed here have no restriction.
+# For k=-1 (all), every task is included regardless.
+UKBB_TASK_MAX_K: Dict[str, int] = {
+    "Cardiac arrest": 32,
+    "Abdominal aortic aneurysm": 24,
+    "Aortic stenosis": 48,
+    "Mitral valve insufficiency": 64,
+    "Endocarditis": 24,
+    "Rheumatic fever and chronic rheumatic heart diseases": 64,
+    "Parkinson's disease (Primary)": 32,
+    "Suicide ideation and attempt or self harm": 64,
+}
+
+
+# ============================================================
+# Dataset-aware helpers
+# ============================================================
+
+# Global dataset mode, set once in main() and read everywhere.
+_DATASET: str = "ehrshot"
+
+
 def task_display_name(task: str) -> str:
-    return TASK_DISPLAY_NAME_OVERRIDE.get(task, LABELING_FUNCTION_2_PAPER_NAME[task])
+    if _DATASET == "ukbb":
+        return UKBB_TASK_DISPLAY_NAMES.get(task, task)
+    return TASK_DISPLAY_NAME_OVERRIDE_EHRSHOT.get(task, LABELING_FUNCTION_2_PAPER_NAME[task])
+
+
+def get_task_display_order() -> List[str]:
+    if _DATASET == "ukbb":
+        return TASK_DISPLAY_ORDER_UKBB
+    return TASK_DISPLAY_ORDER_EHRSHOT
 
 
 def sort_results_by_display_order(results: List) -> List:
-    """Sort DeltaResult list according to TASK_DISPLAY_ORDER."""
-    order = {t: i for i, t in enumerate(TASK_DISPLAY_ORDER)}
+    """Sort DeltaResult list according to the active display order."""
+    order = {t: i for i, t in enumerate(get_task_display_order())}
     return sorted(results, key=lambda r: order.get(r.task, 999))
+
+
+def filter_ukbb_tasks_for_k(tasks: List[str], k: int) -> List[str]:
+    """Remove UKBB tasks that were not evaluated at shot size k.
+
+    For k=-1 (all data), every task is included.
+    For few-shot k>0, exclude tasks whose max evaluated k is < requested k.
+    """
+    if k == -1:
+        return tasks
+    return [t for t in tasks if k <= UKBB_TASK_MAX_K.get(t, float("inf"))]
 
 
 @dataclass(frozen=True)
@@ -323,8 +433,16 @@ def paired_patient_bootstrap_delta_auroc(
 # IO / filtering / alignment
 # ----------------------------
 
-def read_all_probas(exp_dir: str, task: str) -> pd.DataFrame:
-    path = os.path.join(exp_dir, task, "all_probas.csv")
+def read_all_probas(exp_dir: str, task: str, dataset: str = None) -> pd.DataFrame:
+    """Read all_probas CSV. Handles both EHRSHOT and UKBB layouts."""
+    ds = dataset if dataset is not None else _DATASET
+    if ds == "ukbb":
+        # UKBB: flat directory with <TaskName>_all_probas.csv
+        path = os.path.join(exp_dir, f"{task}_all_probas.csv")
+    else:
+        # EHRSHOT: subdirectory per task
+        path = os.path.join(exp_dir, task, "all_probas.csv")
+
     if not os.path.exists(path):
         raise FileNotFoundError(f"Missing: {path}")
     df = pd.read_csv(path)
@@ -332,6 +450,14 @@ def read_all_probas(exp_dir: str, task: str) -> pd.DataFrame:
     miss = req - set(df.columns)
     if miss:
         raise ValueError(f"{path} missing columns: {sorted(miss)}")
+
+    # UKBB labels may be True/False strings — convert to int
+    if df["label"].dtype == object or df["label"].dtype == bool:
+        df["label"] = df["label"].map({True: 1, False: 0, "True": 1, "False": 0})
+        if df["label"].isna().any():
+            raise ValueError(f"Unexpected label values in {path}: {df['label'].unique()}")
+        df["label"] = df["label"].astype(int)
+
     return df
 
 
@@ -466,9 +592,14 @@ def compute_one_task(
     bootstrap: int,
     seed: int,
     collapse_chexpert_flag: bool,
-) -> DeltaResult:
-    df_a = filter_df(read_all_probas(spec_a.exp_dir, task), spec_a, task, collapse_chexpert_flag)
-    df_b = filter_df(read_all_probas(spec_b.exp_dir, task), spec_b, task, collapse_chexpert_flag)
+    dataset: str = "ehrshot",
+) -> Optional[DeltaResult]:
+    try:
+        df_a = filter_df(read_all_probas(spec_a.exp_dir, task, dataset=dataset), spec_a, task, collapse_chexpert_flag)
+        df_b = filter_df(read_all_probas(spec_b.exp_dir, task, dataset=dataset), spec_b, task, collapse_chexpert_flag)
+    except (ValueError, FileNotFoundError) as e:
+        print(f"  [SKIP] {comp_name} / {task}: {e}", file=sys.stderr)
+        return None
 
     # Use all replicates by averaging probabilities per test row
     y_a, pid_a, proba_a, orig_sub_a = mean_proba_over_replicates(df_a)
@@ -560,13 +691,25 @@ def fmt_compact_p(p: float) -> str:
 
 
 def autodiscover_tasks(exp_dir: str) -> List[str]:
-    tasks = []
-    for t in sorted(os.listdir(exp_dir)):
-        if os.path.isfile(os.path.join(exp_dir, t, "all_probas.csv")):
-            tasks.append(t)
-    if not tasks:
-        raise RuntimeError(f"Autodiscover found no tasks under {exp_dir}")
-    return tasks
+    if _DATASET == "ukbb":
+        # UKBB: flat directory, files named <TaskName>_all_probas.csv
+        tasks = []
+        suffix = "_all_probas.csv"
+        for f in sorted(os.listdir(exp_dir)):
+            if f.endswith(suffix):
+                task_name = f[: -len(suffix)]
+                tasks.append(task_name)
+        if not tasks:
+            raise RuntimeError(f"Autodiscover found no UKBB tasks under {exp_dir}")
+        return tasks
+    else:
+        tasks = []
+        for t in sorted(os.listdir(exp_dir)):
+            if os.path.isfile(os.path.join(exp_dir, t, "all_probas.csv")):
+                tasks.append(t)
+        if not tasks:
+            raise RuntimeError(f"Autodiscover found no tasks under {exp_dir}")
+        return tasks
 
 
 def compute_comparison(
@@ -579,16 +722,20 @@ def compute_comparison(
 ) -> List[DeltaResult]:
     results: List[DeltaResult] = []
 
+    # For UKBB, filter out tasks that were not evaluated at this k
+    if _DATASET == "ukbb":
+        tasks = filter_ukbb_tasks_for_k(tasks, comp.a.k)
+
     if num_threads <= 1:
         iterator = tasks
         if tqdm is not None:
             iterator = tqdm(tasks, desc=comp.name, unit="task")
         for task in iterator:
-            results.append(compute_one_task(comp.name, task, comp.a, comp.b, bootstrap, seed, collapse_chexpert_flag))
+            results.append(compute_one_task(comp.name, task, comp.a, comp.b, bootstrap, seed, collapse_chexpert_flag, dataset=_DATASET))
     else:
         with ProcessPoolExecutor(max_workers=num_threads) as ex:
             futs = [
-                ex.submit(compute_one_task, comp.name, task, comp.a, comp.b, bootstrap, seed, collapse_chexpert_flag)
+                ex.submit(compute_one_task, comp.name, task, comp.a, comp.b, bootstrap, seed, collapse_chexpert_flag, _DATASET)
                 for task in tasks
             ]
             iterator = as_completed(futs)
@@ -601,6 +748,8 @@ def compute_comparison(
 
 
 def main() -> int:
+    global _DATASET
+
     ap = argparse.ArgumentParser()
     ap.add_argument(
         "--comparisons",
@@ -614,13 +763,23 @@ def main() -> int:
     ap.add_argument("--num_threads", type=int, default=1, help="Parallel workers over tasks")
     ap.add_argument("--collapse_chexpert", action="store_true", default=True, help="Collapse chexpert subtasks")
     ap.add_argument("--no_collapse_chexpert", dest="collapse_chexpert", action="store_false")
+
+    # Dataset selection
+    ds_group = ap.add_mutually_exclusive_group(required=True)
+    ds_group.add_argument("--ehrshot", action="store_const", const="ehrshot", dest="dataset")
+    ds_group.add_argument("--ukbb", action="store_const", const="ukbb", dest="dataset")
+
     args = ap.parse_args()
+    _DATASET = args.dataset
 
     comps = [parse_comparison(s) for s in args.comparisons]
 
     if args.tasks == ["autodiscover"]:
-        # autodiscover from first model exp_dir
-        tasks = autodiscover_tasks(comps[0].a.exp_dir)
+        if _DATASET == "ukbb":
+            tasks = list(UKBB_TASKS_DEFAULT)
+        else:
+            # autodiscover from first model exp_dir
+            tasks = autodiscover_tasks(comps[0].a.exp_dir)
     else:
         tasks = args.tasks
 
@@ -650,27 +809,10 @@ def main() -> int:
         k_groups.setdefault(r.k, []).append(r)
     for k, results_in_k in k_groups.items():
         pvals = [r.p for r in results_in_k]
+        print(f"\n% Holm correction for k={k} for {len(pvals)} tests.")
         padj = holm_adjust(pvals)
         for r, pa in zip(results_in_k, padj):
             r.p_adj = float(pa)
-
-    # # 3) print per-comparison tables (verbose)
-    # for comp in comps:
-    #     res = sort_results_by_display_order(all_results_by_comp[comp.name])
-
-    #     print(f"\n% Comparison: {comp.a.display_name}_vs_{comp.b.display_name} (k={comp.a.k})  (Δ = A - B)")
-    #     print(f"% A={comp.a}  B={comp.b}")
-    #     print(r"% Columns: task & ΔAUROC & [CI_low, CI_high] & p & p_adj(Holm-per-k) & N_examples & N_patients \\")
-    #     for r in res:
-    #         tname = task_display_name(r.task)
-    #         p_adj = fmt_p(r.p_adj)
-    #         if r.p_adj < 0.05:
-    #             p_adj = r"\textbf{" + p_adj + "}"
-    #         print(
-    #             f"{tname} & {r.delta:+.4f} & "
-    #             f"[{r.ci_low:+.4f}, {r.ci_high:+.4f}] & "
-    #             f"{fmt_p(r.p)} & {p_adj} & {r.n_examples} & {r.n_patients} \\\\"
-    #         )
 
     # 4) Compact tables: one per k, one row per task, one column per baseline.
     result_index: Dict[Tuple[str, int, str], DeltaResult] = {}
@@ -684,6 +826,8 @@ def main() -> int:
         for r in all_results_by_comp[comp.name]:
             result_index[(bname, k, r.task)] = r
 
+    display_order = get_task_display_order()
+
     for k in sorted(k_groups.keys()):
         baselines = baseline_names_seen.get(k, [])
         if not baselines:
@@ -692,7 +836,7 @@ def main() -> int:
         print(f"\n% Compact table: k={k} ({k_label})")
         header_parts = " & ".join([f"$\\Delta$ vs {b}" for b in baselines])
         print(f"% Task & {header_parts} \\\\")
-        for task_key in TASK_DISPLAY_ORDER:
+        for task_key in display_order:
             tname = task_display_name(task_key)
             cells = []
             for bname in baselines:
