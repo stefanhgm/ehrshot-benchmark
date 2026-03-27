@@ -126,9 +126,10 @@ def main(args):
         run_command(calculate_metrics_command)
         
     # Clean up the experiment folder
-    llm_features_file = os.path.join(args.experiment_folder, 'llm_features.pkl')
-    if os.path.exists(llm_features_file):
-        os.remove(llm_features_file)
+    # DEBUG: Do not delete embeddings in case eval fails
+    # llm_features_file = os.path.join(args.experiment_folder, 'llm_features.pkl')
+    # if os.path.exists(llm_features_file):
+    #     os.remove(llm_features_file)
        
     # Step 4: Log results to wandb
     results_path = os.path.join(args.experiment_folder, 'all_results.csv')
