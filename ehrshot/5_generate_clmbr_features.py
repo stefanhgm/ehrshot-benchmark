@@ -1,6 +1,7 @@
 import argparse
 import os
 from loguru import logger
+import time
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generate CLMBR / MOTOR patient representations (for all tasks at once)")
@@ -68,8 +69,15 @@ if __name__ == "__main__":
         )
         logger.info(f"Start | Create CLMBR representations @ {PATH_TO_REPRESENTATIONS}")
         logger.critical(f"Command run:\n{command}")
+        
+        start = time.perf_counter()
+
         assert 0 == os.system(command)
         logger.success(f"Finish | Create CLMBR representations @ {PATH_TO_REPRESENTATIONS}")
+        
+        end = time.perf_counter()
+        elapsed = end - start
+        print(f"\nRepresentation step took: {elapsed:.2f} seconds ({elapsed/60:.2f} min)\n")
     else:
         logger.critical(f"Skipping `clmbr_compute_representations` because representations already exist @ {PATH_TO_REPRESENTATIONS}")
     logger.success("Done!")
