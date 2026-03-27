@@ -545,6 +545,11 @@ if __name__ == "__main__":
         for task_group in task_groups:
             os.makedirs(path_to_output_dir_, exist_ok=True)
             df_ = filter_df(df_means, task_group=task_group, score=score, model_heads=MODEL_HEADS)
+
+            # Just as for task plots, filter ouut celiac k=128 because not enough training/validation examples
+            if task_group == 'new_diagnoses':
+                df_ = df_[~((df_['labeling_function'] == 'new_celiac') & (df_['k'] == 128))]
+            
             # Do another round of averaging over all subtasks:
             df_ = df_.groupby([
                 'model',
