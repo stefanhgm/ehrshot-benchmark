@@ -66,7 +66,7 @@ MODEL_2_INFO: Dict[str, Dict[str, Any]] = {
         'heads' : ['lr_lbfgs', ],
     },
     'qwenclmbrcodes' : {
-        'label' : 'Qwen3-Emb-8B clmbrsubset', # 'Qwen3-Emb-8B + CLMBR Codes',
+        'label' : 'Qwen3-Emb-8B CLMBR codes', # 'Qwen3-Emb-8B + CLMBR Codes',
         'heads' : ['lr_lbfgs', ],
     }
 }
