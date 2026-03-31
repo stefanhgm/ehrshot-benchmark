@@ -191,7 +191,7 @@ SCORE_MODEL_HEAD_2_COLOR = {
             'lr_lbfgs' : 'tab:purple',
         },
         'qwenclmbrcodes' : {
-            'lr_lbfgs' : 'tab:gray',
+            'lr_lbfgs' : 'tab:purple',
         }
     },
     'auprc' : {
@@ -219,7 +219,7 @@ SCORE_MODEL_HEAD_2_COLOR = {
             'lr_lbfgs' : 'tab:purple',
         },
         'qwenclmbrcodes' : {
-            'lr_lbfgs' : 'tab:gray',
+            'lr_lbfgs' : 'tab:purple',
         }
     },
     'brier' : {
@@ -247,7 +247,7 @@ SCORE_MODEL_HEAD_2_COLOR = {
             'lr_lbfgs' : 'tab:purple',
         },
         'qwenclmbrcodes' : {
-            'lr_lbfgs' : 'tab:gray',
+            'lr_lbfgs' : 'tab:purple',
         }
     },
 }
