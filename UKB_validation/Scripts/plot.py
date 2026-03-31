@@ -361,6 +361,23 @@ def plot_one_task_group(df: pd.DataFrame,
         agg_dict
     ).reset_index(drop = True)
 
+    df_stds = df.groupby([
+        'labeling_function',
+        'sub_task',
+        'model',
+        'head',
+        'score',
+        'k',
+    ]).agg({
+        'value' : 'std',
+        'k' : 'first',
+        'labeling_function' : 'first',
+        'sub_task' : 'first',
+        'model' : 'first',
+        'head' : 'first',
+        'score' : 'first',
+    }).reset_index(drop = True)
+
     # models: List[str] = df['model'].unique().tolist()
     # Define desired plot order (first = back, last = front)
     model_order = ['count', 'clmbr', 'bioclinicalbert', 'qwen3']
@@ -372,6 +389,7 @@ def plot_one_task_group(df: pd.DataFrame,
             head_name: str = HEAD_2_INFO[head]['label']
 
             df_means_ = df_means[(df_means['model'] == model) & (df_means['head'] == head)].sort_values(by='k')
+            df_stds_ = df_stds[(df_stds['model'] == model) & (df_stds['head'] == head)].sort_values(by='k')
 
             # Color
             color: str = SCORE_MODEL_HEAD_2_COLOR[score][model][head]
@@ -379,11 +397,13 @@ def plot_one_task_group(df: pd.DataFrame,
             # Plot individual subtasks with thinner lines
             for subtask in df_means_['labeling_function'].unique():
                 df_m_ = df_means_[df_means_['labeling_function'] == subtask]
-                if((shadedregion) and (subtask in ["death", "hospitalization", "disease_onset"]) and (not (addlinesdiagnoses and task_group == "Assignment of New Diagnoses"))):
+                if((shadedregion) and (subtask in ["death", "hospitalization", "disease_onset"]) and (not (addlinesdiagnoses and task_group == "Assignment of New Diagnoses")) and (not task_group == "mean_all_task_groups")):  # only add shaded regions for the 3 diagnosis subtasks in the Assignment of New Diagnoses task group, and not in the mean_all_task_groups which combines across task groups
                     ax.fill_between( # shaded region
                         df_m_['k'],
-                        df_m_['lower'],
-                        df_m_['upper'],
+                        #df_m_['lower'],
+                        #df_m_['upper'],
+                        df_m_['value'] - df_stds_['value'],
+                        df_m_['value'] + df_stds_['value'],
                         color=color,
                         alpha=0.08,
                         linewidth=0
@@ -393,7 +413,7 @@ def plot_one_task_group(df: pd.DataFrame,
     
             # Plot average line per model with improved styling
             df_ = df_means_.groupby(['k']).agg({'value': 'mean', 'k': 'first'}).reset_index(drop=True)
-            marker = 'o' if 'clmbr' in model.lower() else ('^' if 'bioclinicalbert' in model.lower() else ('X' if 'qwen3' in model.lower() else 'p'))
+            marker = '^' if ('bioclinicalbert' in model.lower() or 'qwenclmbrcodes' in model.lower()) else ( 'o' if 'clmbr' in model.lower() else ('X' if 'qwen3' in model.lower() else 'p'))
             ax.plot(df_['k'], df_['value'], color=color, 
                    label=f'{model_name}+{head_name}',
                    linestyle='-', marker=marker, 
