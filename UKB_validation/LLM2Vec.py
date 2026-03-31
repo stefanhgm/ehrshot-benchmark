@@ -298,39 +298,6 @@ def main(instruction, task, **kwargs):
 
         # Step 4: Concatenate original and parent rows
         filtered_records = pd.concat([filtered_records, df_parents], ignore_index=True)
-        #filtered_records = filtered_records.drop_duplicates(subset=['eid', 'codes'])
-        filtered_records = pl.from_pandas(filtered_records)
-        
-
-        concept_counts = (
-            filtered_records
-            .group_by('codes')
-            .len()
-            .rename({"len": "occurrences"})  # Renaming for clarity
-        )
-
-        concept_counts = concept_counts.with_columns(pl.col("occurrences").cast(pl.Int32))
-
-        # Filter concepts appearing at least `num_codes_in_records` times
-        if(not config["clmbrcodes"]):
-            valid_concepts = concept_counts.filter(
-                pl.col("occurrences") >= config["num_codes_in_records"]
-            )["codes"]  # Extract valid concept_ids
-
-            # Filter the DataFrame to keep only those rows
-            valid_concepts = valid_concepts.to_list()
-
-            filtered_records = filtered_records.filter(
-                pl.col("codes").is_in(valid_concepts)
-            )
-
-        ## Add ontology extension - precalculated for two hops
-        filtered_records = filtered_records.to_pandas()
-
-
-        ## filter out patients that have no entries after removing the ones with less than 50 occurrences
-        #eids_with_records = set(list(map(int, filtered_records["eid"])))
-        #prepared_records = prepared_records[prepared_records["eid"].isin(eids_with_records)]
 
 
 
