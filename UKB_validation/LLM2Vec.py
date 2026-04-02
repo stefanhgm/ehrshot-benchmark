@@ -46,21 +46,18 @@ def main(instruction, task, **kwargs):
 
     # Path components based on configuration
     path_components = {
-        'datespath': "dates", #if kwargs["include_dates"] else "nodates",
-        'bigdataset': "bigdataset_", #if kwargs["use_big_dataset"] else "",
         'tokenlength': f"{kwargs['tokenlength']}_" if kwargs["tokenlength"] != 4096 else "",
         'clmbrcodes': "clmbrcodes_" if kwargs["clmbrcodes"] else "",
         'uniquecodes': "keep_all_codes_" if kwargs["keep_all_codes"] else "",
     }
 
     if(not kwargs["infer_all"]):
-        embeddingfile = f"{embedding_path}embeddings_{task}_{path_components['bigdataset']}{path_components['tokenlength']}dates_query_{path_components['clmbrcodes']}{path_components['uniquecodes']}" + kwargs["model"] + str(int(12*kwargs["minyears"])) + "-" + str(kwargs["maxyears"]) + ".feather"
+        embeddingfile = f"{embedding_path}embeddings_{task}_bigdataset_{path_components['tokenlength']}dates_query_{path_components['clmbrcodes']}{path_components['uniquecodes']}" + kwargs["model"] + str(int(12*kwargs["minyears"])) + "-" + str(kwargs["maxyears"]) + ".feather"
         print(embeddingfile)
     else:
-        embeddingfile_qwen = f"{embedding_path}embeddings_{task}_{path_components['bigdataset']}{path_components['tokenlength']}dates_query_{path_components['clmbrcodes']}{path_components['uniquecodes']}_Qwen" + str(int(12*kwargs["minyears"])) + "-" + str(kwargs["maxyears"]) + ".feather"
-        #embeddingfile_qwen = "/sc-projects/sc-proj-ukb-cvd/projects/llm2vec/data/embeddings/embeddings_markdownformat/embeddings_hospitalization_bigdataset_8192_dates_query_Qwen30-1.feather"
-        embeddingfile_qwen3 = f"{embedding_path}embeddings_{task}_{path_components['bigdataset']}{path_components['tokenlength']}dates_query_{path_components['clmbrcodes']}{path_components['uniquecodes']}_Qwen3" + str(int(12*kwargs["minyears"])) + "-" + str(kwargs["maxyears"]) + ".feather"
-        embeddingfile_llm2vec = f"{embedding_path}embeddings_{task}_{path_components['bigdataset']}{path_components['tokenlength']}dates_query_{path_components['clmbrcodes']}{path_components['uniquecodes']}_LLM2Vec" + str(int(12*kwargs["minyears"])) + "-" + str(kwargs["maxyears"]) + ".feather"
+        embeddingfile_qwen = f"{embedding_path}embeddings_{task}_bigdataset_{path_components['tokenlength']}dates_query_{path_components['clmbrcodes']}{path_components['uniquecodes']}_Qwen" + str(int(12*kwargs["minyears"])) + "-" + str(kwargs["maxyears"]) + ".feather"
+        embeddingfile_qwen3 = f"{embedding_path}embeddings_{task}_bigdataset_{path_components['tokenlength']}dates_query_{path_components['clmbrcodes']}{path_components['uniquecodes']}_Qwen3" + str(int(12*kwargs["minyears"])) + "-" + str(kwargs["maxyears"]) + ".feather"
+        embeddingfile_llm2vec = f"{embedding_path}embeddings_{task}_bigdataset_{path_components['tokenlength']}dates_query_{path_components['clmbrcodes']}{path_components['uniquecodes']}_LLM2Vec" + str(int(12*kwargs["minyears"])) + "-" + str(kwargs["maxyears"]) + ".feather"
         embeddingfile_clmbr = f"{embedding_path}embeddings_clmbr_5000-1.feather"
 
 
@@ -83,10 +80,6 @@ def main(instruction, task, **kwargs):
         random_seed=42,
         num_codes_in_records=50,
 
-        # Dataset options
-        use_big_dataset = True, #kwargs["use_big_dataset"],
-        diseaseunspecific = kwargs["diseaseunspecific"],
-
         # Data paths
         covariates_path = data_path / "baseline_covariates_231016.feather",
         big_dataset_path = f"{UKB_data_path}dataportal_final_records_omop_240625_mapped_eids_inpatient_updated.feather", #from Inpatient_mapping.py file
@@ -108,11 +101,10 @@ def main(instruction, task, **kwargs):
 
 
     # select only necessary columns from records dataframe
-    if(kwargs["use_big_dataset"]):
-        if(not kwargs["clmbrcodes"]):
-            records = pl.from_pandas(records[["eid", "date", "concept_name", "concept_id", "recruitment_date", "code", "vocabulary_id", "vocabulary"]])
-        else:
-            records = pl.from_pandas(records[["eid", "date", "concept_name", "concept_id", "recruitment_date", "code"]])
+    if(not kwargs["clmbrcodes"]):
+        records = pl.from_pandas(records[["eid", "date", "concept_name", "concept_id", "recruitment_date", "code", "vocabulary_id", "vocabulary"]])
+    else:
+        records = pl.from_pandas(records[["eid", "date", "concept_name", "concept_id", "recruitment_date", "code"]])
 
     # Continue with the rest of the processing - check that date, recruitment_date and concept_name are not null (all required for embedding creation/ inference)
     records = records.filter(
@@ -121,8 +113,8 @@ def main(instruction, task, **kwargs):
         & pl.col("concept_name").is_not_null()
     )
 
-    #filter out patients if calculation should be diseasespecific
-    if((not kwargs["diseaseunspecific"]) or ((kwargs["diseaseunspecific"]) & (not kwargs["calculate_embeddings"]))):
+    #filter out patients with disease prior recruitment - relevant for prediction
+    if(not kwargs["calculate_embeddings"]):
         records = records.with_columns(
             pl.col("date").str.to_datetime("%Y-%m-%d"),  # Adjust format as needed
             pl.col("recruitment_date").str.to_datetime("%Y-%m-%d")
@@ -242,7 +234,6 @@ def main(instruction, task, **kwargs):
         # Calculate or load embeddings
         if(kwargs["calculate_embeddings"]):
             prepared_records.sort_values(by="eid", inplace=True)
-            #embedding_df = process_embeddings(prepared_records[kwargs["start"]:min(kwargs["end"], len(prepared_records))], config, **kwargs) #include in case embeddings should be calculated in smaller patient subsets
             _ = process_embeddings(prepared_records, config, instruction, **kwargs)
             
             return
@@ -254,7 +245,7 @@ def main(instruction, task, **kwargs):
     # from filtered_records, filter out the entries that only occur less than 50 times (need to check if some patients do not have any remaining entries)
     # also before add ontology extension if wanted
     # Count occurrences of each concept code combined with vocabulary_id
-    if((config["use_big_dataset"]) & (not kwargs["clmbrcodes"])):
+    if(not kwargs["clmbrcodes"]):
         filtered_records = filtered_records.with_columns(
             (filtered_records["vocabulary_id"].cast(str) + "/" + filtered_records["code"].cast(str)).alias("codes")
         )
@@ -270,34 +261,33 @@ def main(instruction, task, **kwargs):
     
 
     # Add ontology extension for all codes in filtered_records for big_dataset
-    if(config["use_big_dataset"]):
-        # MAKE PRETTIER! - For now: add ontology expansion for all codes in filtered_records
-        code_to_parents = {}
-        with open("Data_preprocessing/mappings/code_to_parent_mapping.csv", "r") as f:
-            # Skip header
-            next(f)
-            for line in f:
-                code, parent_code = line.strip().split(",")
-                if code not in code_to_parents:
-                    code_to_parents[code] = []
-                code_to_parents[code].append(parent_code)
+    code_to_parents = {}
+    with open("Data_preprocessing/mappings/code_to_parent_mapping.csv", "r") as f:
+        # Skip header
+        next(f)
+        for line in f:
+            code, parent_code = line.strip().split(",")
+            if code not in code_to_parents:
+                code_to_parents[code] = []
+            code_to_parents[code].append(parent_code)
 
-        mapping_records = [
-            (child, parent)
-            for child, parents in code_to_parents.items()
-            for parent in parents
-        ]
-        df_mapping = pd.DataFrame(mapping_records, columns=['codes', 'parent_code'])
+    mapping_records = [
+        (child, parent)
+        for child, parents in code_to_parents.items()
+        for parent in parents
+    ]
+    df_mapping = pd.DataFrame(mapping_records, columns=['codes', 'parent_code'])
 
-        # Step 2: Merge to bring original row data to parents
-        df_parents = df_mapping.merge(filtered_records, on='codes', how='inner')
+    # Step 2: Merge to bring original row data to parents
+    df_parents = df_mapping.merge(filtered_records, on='codes', how='inner')
 
-        # Step 3: Replace 'code' with 'parent_code' for parent rows
-        df_parents['codes'] = df_parents['parent_code']
-        df_parents = df_parents.drop(columns=['parent_code'])
+    # Step 3: Replace 'code' with 'parent_code' for parent rows
+    df_parents['codes'] = df_parents['parent_code']
+    df_parents = df_parents.drop(columns=['parent_code'])
 
-        # Step 4: Concatenate original and parent rows
-        filtered_records = pd.concat([filtered_records, df_parents], ignore_index=True)
+    # Step 4: Concatenate original and parent rows
+    filtered_records = pd.concat([filtered_records, df_parents], ignore_index=True)
+
 
 
 
@@ -391,20 +381,7 @@ if __name__ == '__main__':
     parser.add_argument("--batch_size", type=int, help="Batchsize to calculate embeddings", default=10)
 
     parser.add_argument("--keep_all_codes", action="store_true", help="Use all codes instead of unqiue codes in correct order for patient serialization")
-    parser.add_argument("--use_big_dataset", type=lambda x: x.lower() == "true", nargs='?', const=True, default=True, help="Use the bigger dataset including the gp_clinical data")
 
-
-    ## potentially remove
-    #parser.add_argument("--use_big_dataset", type=lambda x: x.lower() == "true", nargs='?', const=True, default=False, help="Use the bigger dataset including the gp_clinical data")
-    
-
-    ## remove
-    parser.add_argument("--diseaseunspecific", action="store_true", help="Perform calculation disease/ indication unspecific.")
-    parser.add_argument("--ehr_format", type=lambda x: x.lower() == "true", nargs='?', const=True, help="Include if data should be in EHR format", default=True)
-    parser.add_argument("--start", type=int)
-    parser.add_argument("--end", type=int)
-    parser.add_argument("--include_dates", type=lambda x: x.lower() == "true", nargs='?', const=True, default=False)
-    parser.add_argument("--save_embeddings", action="store_true", help="Set to true if embeddings of run shall be stored.")
     
     args = parser.parse_args()
 
@@ -433,13 +410,8 @@ if __name__ == '__main__':
         instruction_task = f"will the patient be admitted to the hospital within {'one' if args.maxyears == 1 else f'{args.maxyears}'} year"
         task = "hospitalization"
     else:    
-        if(args.diseaseunspecific == True):
-            instruction_task = f"what are the key clinical features of the patient to predict future medical conditions"
-            task = "disease_onset"
-        else:
-            #instruction = f"Classify if the following patient is either likely or unlikely to develop {args.indication} in the next {args.maxyears} years based on the following electronic healthcare record."
-            instruction_task = f"has the patient {args.indication.lower()}"
-            task = args.phecode
+        instruction_task = f"has the patient {args.indication.lower()}"
+        task = args.phecode
     
     print(args.indication)
 
