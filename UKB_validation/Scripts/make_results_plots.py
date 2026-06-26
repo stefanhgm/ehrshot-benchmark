@@ -167,6 +167,8 @@ def plot_sensitivity_analysis(df_results: pd.DataFrame,
     task_groups: List[str] = list(TASK_GROUP_2_LABELING_FUNCTION.keys())
 
     for idx, task_group in enumerate(task_groups):
+        if task_group == "Assignment of New Diagnoses":
+            addlinesdiagnoses = True
         plot_one_task_group(df_results, 
                             axes.flat[idx], 
                             task_group, 
