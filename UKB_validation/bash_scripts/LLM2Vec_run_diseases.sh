@@ -1,7 +1,7 @@
 #!/bin/bash
 
 
-CODE_DIR=~/Documents/LLM2Vec_project/bash_scripts
+CODE_DIR=~/Documents/ehrshot-benchmark/UKB_validation/bash_scripts
 
 cd $CODE_DIR
 

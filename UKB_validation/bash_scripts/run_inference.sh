@@ -17,7 +17,7 @@ modelname="$5"
 # Run the program (replace "your_program" with the actual command)
 echo "Running program for disease: $disease with phecode: $phecode"
 
-CODE_DIR=~/Documents/LLM2Vec_project
+CODE_DIR=~/Documents/ehrshot-benchmark/UKB_validation
 
 cd $CODE_DIR
 
