@@ -1,7 +1,7 @@
 #!/bin/bash
 
 
-CODE_DIR=/home/gear11/Documents/LLM2Vec_project/bash_scripts
+CODE_DIR=~/Documents/LLM2Vec_project/bash_scripts
 
 cd $CODE_DIR
 
@@ -51,8 +51,9 @@ maxyears=1
 models=(
     #"LLM2Vec"          # uncomment for calculating LLM2Vec embeddings
     #"Qwen"             # uncomment for calculating Qwen2 embeddings
-    "Qwen3"             # uncomment for calculating Qwen3 embeddings
+    #"Qwen3"             # uncomment for calculating Qwen3 embeddings
     #"BioClinicalBERT"  # uncomment for calculating BioClinicalBERT embeddings (Similar to MEME approach)
+    "bioclinicalbert"
     #"runall"           # uncomment to perform downstream prediction - need to calculate embeddings first
 )
 

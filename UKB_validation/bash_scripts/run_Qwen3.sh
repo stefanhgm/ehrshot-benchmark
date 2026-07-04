@@ -5,8 +5,8 @@
 #SBATCH --mem=320GB
 #SBATCH --job-name=QWEN3
 #SBATCH -N 1
-#SBATCH -e /home/gear11/logs/job_%j.err
-#SBATCH -o /home/gear11/logs/job_%j.out
+#SBATCH -e ./logs/job_%j.err
+#SBATCH -o ./logs/job_%j.out
 
 # Retrieve disease and phecode from command line arguments
 disease="$1"
@@ -18,15 +18,15 @@ modelname="$5"
 # Run the program (replace "your_program" with the actual command)
 echo "Running program for disease: $disease with phecode: $phecode"
 
-CODE_DIR=/home/gear11/Documents/LLM2Vec_project
+CODE_DIR=~/Documents/LLM2Vec_project
 
 cd $CODE_DIR
 
 export HF_HOME=/sc-projects/sc-proj-dh-ag-eils-ml/shared_hf_cache
 
-conda activate /sc-projects/sc-proj-ukb-cvd/environments/Qwen
+conda activate Qwen
 
-cmd="conda run -p /sc-projects/sc-proj-ukb-cvd/environments/Qwen python3 ./LLM2Vec.py \
+cmd="conda run -p Qwen python3 ./LLM2Vec.py \
   --indication \"$disease\" \
   --phecode \"$phecode\" \
   --model \"$modelname\" \
