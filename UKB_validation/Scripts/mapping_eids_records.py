@@ -3,14 +3,17 @@ import pandas as pd
 import polars as pl
 
 
+import sys
+sys.path.append("../../UKB_validation/")
+#import python file containing filenames
+import filepaths as fp
+
+
 data_path = pathlib.Path(
-    #"/sc-projects/sc-proj-ukb-cvd/data/3_datasets_post/231012_ukb_preprocessing/ukb_data_portal/2_final"
     "/sc-projects/sc-proj-ukb-cvd/data/3_datasets_post/240625_ukb_preprocessing/ukb_data_portal/2_final/"
 )
 
 records_path = data_path / "dataportal_final_records_omop_240625.feather"
-#endpoints_path = data_path / "dataportal_final_endpoints_240625.feather"
-#phecodes_path = data_path / "dataportal_final_phecodes_240625.feather"
 covariates_path = data_path / "baseline_covariates_240625.feather"
 
 records = pd.read_feather(records_path)

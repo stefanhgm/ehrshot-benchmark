@@ -13,10 +13,15 @@ import numpy as np
 import gc
 
 import pickle
-
 import FEMR_functions
 
-Calculate_MEDS_format_only = False
+import sys
+sys.path.append("../../UKB_validation/")
+#import python file containing filenames
+import filepaths as fp
+
+#set to True if MEDS format should be calculated, otherwise set to False to calculate embeddings from MEDS format (run with "True" first)
+Calculate_MEDS_format_only = True 
 
 print("Starting...")
 
@@ -29,7 +34,7 @@ import femr.models.transformer
 import femr.models.tokenizer
 import femr.models.processor
 
-shared_cache_dir = "/sc-projects/sc-proj-dh-ag-eils-ml/shared_hf_cache/hub" #if models are saved in specific directory, otherwise comment out
+shared_cache_dir = fp.shared_cache_dir #if models are saved in specific directory, otherwise comment out
 os.environ["HF_HOME"] = shared_cache_dir
 hf_token_path = os.path.expanduser("~/.huggingface/token") #add your own path to hf token
 with open(hf_token_path, "r") as f:
@@ -52,14 +57,14 @@ model = femr.models.transformer.FEMRModel.from_pretrained(model_name)
 if(Calculate_MEDS_format_only):
     ## Read in own data
     data_path = pathlib.Path(
-        "/sc-projects/sc-proj-ukb-cvd/data/3_datasets_post/231012_ukb_preprocessing/ukb_data_portal/2_final"
+        fp.UKB_covariates_folder
     )
 
-    covariates_path = data_path / "baseline_covariates_231016.feather"
+    covariates_path = data_path / fp.UKB_covariates_filename
     covariates_df = pd.read_feather(covariates_path, columns=['eid', 'sex_f31_0_0', 'ethnic_background_f21000_0_0', 'birth_date'])
     covariates_df.head(), covariates_df.shape
 
-    clmbr_UKB_mapping_complete_path = "/sc-projects/sc-proj-ukb-cvd/projects/llm2vec/data/filtered_records_mapped_clmbrwithnames.feather"
+    clmbr_UKB_mapping_complete_path = fp.clmbr_UKB_mapping_complete_path
     clmbr_UKB_mapping_complete = pd.read_feather(clmbr_UKB_mapping_complete_path)
 
     ## convert ethnicity to clmbr format
@@ -190,12 +195,12 @@ if(Calculate_MEDS_format_only):
 
 
     # Example usage
-    save_patients_to_pickle(MEDS_schema, '/sc-projects/sc-proj-ukb-cvd/projects/llm2vec/data/clmbr_ukb_meds.pkl')
+    save_patients_to_pickle(MEDS_schema, fp.clmbr_meds_pickle)
 
 else:
     # Load MEDS schema
     #with open('patients.pkl', 'rb') as f:
-    with open('/sc-projects/sc-proj-ukb-cvd/projects/llm2vec/data/clmbr_ukb_meds.pkl', 'rb') as f:
+    with open(fp.clmbr_meds_pickle, 'rb') as f:
         MEDS_schema = pickle.load(f)
     
     #MEDS_schema = MEDS_schema[0:1000]
@@ -232,7 +237,7 @@ else:
 
     results = []
 
-    temp_dir = f"/sc-projects/sc-proj-ukb-cvd/projects/llm2vec/data/embeddings/temp_batches_{tokens_per_batch}"
+    temp_dir = f"{fp.embeddings_path}/temp_batches_{tokens_per_batch}"
     os.makedirs(temp_dir, exist_ok=True)
 
     batch_count = 0  # Track batch numbers
@@ -241,7 +246,7 @@ else:
     #tensor_batches = []
 
     #output_path_csv = "/sc-projects/sc-proj-ukb-cvd/projects/llm2vec/data/embeddings/embeddings_clmbr_1024-1.csv"
-    output_path_feather = f"/sc-projects/sc-proj-ukb-cvd/projects/llm2vec/data/embeddings/embeddings_clmbr_{tokens_per_batch}-1.feather"
+    output_path_feather = f"{fp.embeddings_path}/embeddings_clmbr_{tokens_per_batch}-1.feather"
 
     #with open (output_path_feather, 'wb') as filename:
     for batch in tqdm(batches, desc="Processing", unit="batch"):

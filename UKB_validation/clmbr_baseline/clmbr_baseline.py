@@ -11,11 +11,14 @@ import matplotlib.pyplot as plt
 import polars as pl
 import numpy as np
 
-
+import sys
+sys.path.append("../../UKB_validation/")
+#import python file containing filenames
+import filepaths as fp
 
 
 # Read in available clmbr codes
-clmbr_mapping = pd.read_csv("code_lookup.csv", index_col=0)
+clmbr_mapping = pd.read_csv("./code_lookup.csv", index_col=0)
 
 # create two new columns called code and source, containing the split values of the code_string column
 clmbr_mapping[['source', 'code']] = clmbr_mapping['code_string'].str.split('/', n=1, expand=True)
@@ -27,7 +30,7 @@ clmbr_mapping["code"] = clmbr_mapping["code"].astype(str)
 clmbr_mapping_unique = clmbr_mapping.drop_duplicates(subset=["source", "code"], keep=False)
 
 # Read in ATHENA dataset
-path = "/sc-projects/sc-proj-ukb-cvd/data/mapping/athena_250220" #change path to your athena folder
+path = fp.athena_dataset_path #change path to your athena folder
 vocab = {
     "concept": pd.read_csv(f"{path}/CONCEPT.csv", sep="\t"),
     "concept_cpt4": pd.read_csv(f"{path}/CONCEPT_CPT4.csv", sep="\t"),
@@ -135,7 +138,7 @@ valid_mapping_relations = [
     #"Is a",
     #"Subsumes",
     "Maps to",
-    # "RxNorm has ing", #evtl ab hier rausnehmen - testen wie viele
+    # "RxNorm has ing", 
     # "Brand name of",
     # "RxNorm - CVX",
     # "SNOMED - RxNorm eq",
@@ -169,8 +172,7 @@ clmbr_athena_mapped_direct = clmbr_mapping_unique.merge(
 
 
 ## now read in UKB data and map to clmbr codes 1. without vocabulary, 2. with second vocabulary
-#records_path_big = "/sc-projects/sc-proj-ukb-cvd/projects/llm2vec/data/dataportal_final_records_omop_240625_mapped_eids.feather"
-records_path_big = "/sc-projects/sc-proj-ukb-cvd/projects/llm2vec/data/dataportal_final_records_omop_240625_mapped_eids_inpatient_updated.feather"
+records_path_big = fp.records_path_big
 records = pd.read_feather(records_path_big)
 
 # remove all entries after recruitment date
@@ -262,26 +264,4 @@ clmbr_UKB_mapping_complete = clmbr_UKB_mapping_complete[clmbr_UKB_mapping_comple
 
 
 clmbr_UKB_mapping_complete = clmbr_UKB_mapping_complete[["eid", "date", "code", "source", "concept_name", "concept_id", "recruitment_date", "domain_id"]]
-clmbr_UKB_mapping_complete.to_feather("/sc-projects/sc-proj-ukb-cvd/projects/llm2vec/data/filtered_records_mapped_clmbrwithnames.feather")
-
-# ## for the LLMs, adapt the df a bit and save separately
-
-# clmbr_UKB_mapping_complete = clmbr_UKB_mapping_complete[["eid", "date", "concept_name", "concept_id", "recruitment_date", "domain_id"]]
-# clmbr_UKB_mapping_complete.to_feather("/sc-projects/sc-proj-ukb-cvd/projects/llm2vec/data/clmbr_ukb_mapping.feather")
-
-
-
-
-
-# #Just for the overview
-# clmbr_UKB_mapping_complete["ehr_class"] = clmbr_UKB_mapping_complete["domain_id"].apply(lambda x:  "Medications" if x in ["Drug"] else "Procedures" if x in ["Procedure", "Measurement"] else "Diagnoses")
-
-
-# clmbr_UKB_mapping_complete["date"] = clmbr_UKB_mapping_complete["date"].astype(str)
-# clmbr_UKB_mapping_complete["recruitment_date"] = clmbr_UKB_mapping_complete["recruitment_date"].astype(str)
-# clmbr_UKB_mapping_complete["date"] = pd.to_datetime(clmbr_UKB_mapping_complete["date"])
-# clmbr_UKB_mapping_complete["recruitment_date"] = pd.to_datetime(clmbr_UKB_mapping_complete["recruitment_date"])
-# # filter out records appearing after recruitment_date
-# records_df = clmbr_UKB_mapping_complete[clmbr_UKB_mapping_complete["date"] <= clmbr_UKB_mapping_complete["recruitment_date"]]
-
-# print(clmbr_UKB_mapping_complete["ehr_class"].value_counts())
+clmbr_UKB_mapping_complete.to_feather(fp.clmbr_UKB_mapping_complete_path)

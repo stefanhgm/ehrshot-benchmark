@@ -18,9 +18,13 @@ import torch
 import torch.nn.functional as F
 
 import polars as pl
-import sys
 
-sys.path.append('./LLM2Vec_project/')  # Path where LLM2Vec.py - main script is located
+import sys
+sys.path.append("../UKB_validation/")
+#import python file containing filenames
+import filepaths as fp
+
+sys.path.append('./UKB_validation/')  # Path where LLM2Vec.py - main script is located
 from my_utils import TIMEBINS, TIMEBIN_LABELS
 
 import LLM2Vec_load_process_data as load_process_data
@@ -30,7 +34,7 @@ from LLM2Vec_embeddingscreation import process_embeddings
 
 
 
-hf_token_path = os.path.expanduser("/home/gear11/.huggingface/token") #change hf token to your own token
+hf_token_path = os.path.expanduser("~/.huggingface/token") #change hf token to your own token
 with open(hf_token_path, "r") as f:
     os.environ["HF_TOKEN"] = f.read().strip()
 
@@ -39,10 +43,10 @@ with open(hf_token_path, "r") as f:
 def main(instruction, task, **kwargs):
 
     data_path = pathlib.Path(
-        "/sc-projects/sc-proj-ukb-cvd/data/3_datasets_post/231012_ukb_preprocessing/ukb_data_portal/2_final"
+        fp.UKB_covariates_folder
     )
-    embedding_path = "/sc-projects/sc-proj-ukb-cvd/projects/llm2vec/data/embeddings/" #change to your own path - here, all embeddings should be stored
-    UKB_data_path = "/sc-projects/sc-proj-ukb-cvd/projects/llm2vec/data/"
+    embedding_path = f"{fp.BASE_PATH_EMBEDDINGS}" #change to your own path - here, all embeddings should be stored
+    UKB_data_path = f"{fp.BASE_PATH_DATA}data"
 
     # Path components based on configuration
     path_components = {
@@ -262,7 +266,7 @@ def main(instruction, task, **kwargs):
 
     # Add ontology extension for all codes in filtered_records for big_dataset
     code_to_parents = {}
-    with open("Data_preprocessing/mappings/code_to_parent_mapping.csv", "r") as f:
+    with open(fp.ontology_extension, "r") as f:
         # Skip header
         next(f)
         for line in f:

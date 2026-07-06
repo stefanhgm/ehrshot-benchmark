@@ -12,8 +12,7 @@ CODE_DIR=~/Documents/ehrshot-benchmark/UKB_validation/clmbr_baseline
 
 cd $CODE_DIR
 
-source ~/.bashrc
 
-conda activate /sc-projects/sc-proj-ukb-cvd/environments/LLM2Vec
+conda activate LLM2Vec
 
 python3 ./clmbr_baseline.py 

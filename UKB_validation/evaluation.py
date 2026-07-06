@@ -23,6 +23,12 @@ from my_utils import (
 )
 
 
+import sys
+sys.path.append("../UKB_validation/")
+#import python file containing filenames
+import filepaths as fp
+
+
 from sklearn.model_selection import GridSearchCV, PredefinedSplit
 from scipy.sparse import issparse
 import scipy.sparse as sp
@@ -265,11 +271,10 @@ def run_evaluation(X_train: np.ndarray,
 def main_evaluation(disease, phecode, clmbrcodes=False, counts_df=None, counts_eids=None):    
     SHOT_STRAT = "all"
     PATH_TO_SHOTS = f"./Splits/kshots/{SHOT_STRAT}_{disease}_shots_data.json"
-    PATH_TO_SPLIT_CSV = "/sc-projects/sc-proj-ukb-cvd/projects/llm2vec/data/splits.json"
-    PATH_TO_LABELED_PATIENTS=f"/home/gear11/Documents/LLM2Vec_project/Splits/generate_labels_2/labeled_patients_{disease}.csv"
-    #PATH_TO_FEATURES_DIR = 
+    PATH_TO_SPLIT_CSV = fp.PATH_TO_SPLIT_CSV
+    PATH_TO_LABELED_PATIENTS=f"{fp.PATH_TO_LABELED_PATIENTS_FOLDER}/labeled_patients_{disease}.csv"
     clmbraddition = "_clmbr" if clmbrcodes else ""
-    EMBEDDING_PATH = "/sc-projects/sc-proj-ukb-cvd/projects/llm2vec/data/embeddings/"
+    EMBEDDING_PATH = fp.EMBEDDING_PATH
     LABELING_FUNCTION = disease
     IS_FORCE_REFRESH=False
     NUM_THREADS = 20
