@@ -43,6 +43,7 @@ conda env create -f environment_qwen.yml
 
 **Steps**
 
+- In file filepaths.py - filepaths are provided, adjust them to your filesystem.
 - Generate embeddings for all models (LLM2Vec, Qwen2 and Qwen3)
     - bash script LLM2Vec_run_diseases.sh can be used. Here, most importantly, select the model (LLM2Vec/Qwen(2)/Qwen3) for which to calculate the embeddings for. In case only inference should be performed, just select the inference option.
 - Save all embeddings in a folder
@@ -58,7 +59,6 @@ conda env create -f environment_qwen.yml
 - UKB data:
     - dataportal_final_records_omop_240625_mapped_eids(_inpatient_updated*)* (see required data for UKB)
     - covariates file (see required data for UKB)
-- After downloading, data was cleaned using the script …
 
 **Steps**
 
@@ -68,6 +68,7 @@ conda env create -f environment_qwen.yml
 
 ### Evaluation
 
+- Evaluation is performed using script LLM2Vec.py - bash script LLM2Vec_run_diseases.sh can be used with flag "run_all".
 - Results are written into folders “images” and “Tables”, in which a folder “death”, “disease_onset” and “hospitalization” should be present.
 - For evaluation, the bash script LLM2Vec_run_diseases.sh can be used
 
