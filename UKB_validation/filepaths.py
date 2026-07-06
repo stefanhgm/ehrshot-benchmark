@@ -1,6 +1,8 @@
 ### clmbr_baseline
 ## clmbr_baseline_create_embeddings.py
+# folder containing hf models
 shared_cache_dir = "/sc-projects/sc-proj-dh-ag-eils-ml/shared_hf_cache/hub"
+# folder containing all UKB data files
 UKB_covariates_folder = "/sc-projects/sc-proj-ukb-cvd/data/3_datasets_post/231012_ukb_preprocessing/ukb_data_portal/2_final"
 
 # file containing covariates including age, gender and birth date for all patients in UKB
@@ -34,6 +36,6 @@ BASE_PATH_RESULTS = "/sc-projects/sc-proj-ukb-cvd/projects/llm2vec/"
 BASE_PATH_FIGS_EHRSHOT = "/home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/figures/task_groups/"
 
 ## LLM2Vec.py
-
+# csv file containing code to parent mapping for all codes in the dataset - used for ontology extension
 ontology_extension = "Data_preprocessing/mappings/code_to_parent_mapping.csv"
     
