@@ -268,7 +268,7 @@ def plot_radar_chart(df_results: pd.DataFrame, k: int, path_to_output_dir: str, 
     # Create model+head labels with custom mapping
     def get_custom_model_name(model, head):
         model_head = f"{MODEL_2_INFO[model]['label']}+{HEAD_2_INFO[head]['label']}"
-        if model_head == "CLMBR+LR":
+        if model_head == "CLMBR-T-Base+LR":
             return "EHR Foundation Model"
         elif model_head == "Count-based+GBM":
             return "Counts Baseline"

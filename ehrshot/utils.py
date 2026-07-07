@@ -20,7 +20,7 @@ SPLIT_VAL_CUTOFF: int = 85
 MODEL_2_INFO: Dict[str, Dict[str, Any]] = {
 # Removed count based model for debugging
     'clmbr' : {
-        'label' : 'CLMBR',
+        'label' : 'CLMBR-T-Base',
         'heads' : ['lr_lbfgs', ],
     },
     'count' : {
