@@ -45,8 +45,8 @@ def main(instruction, task, **kwargs):
     data_path = pathlib.Path(
         fp.UKB_covariates_folder
     )
-    embedding_path = f"{fp.BASE_PATH_EMBEDDINGS}" #change to your own path - here, all embeddings should be stored
-    UKB_data_path = f"{fp.BASE_PATH_DATA}data"
+    embedding_path = f"{fp.EMBEDDING_PATH}" #change to your own path - here, all embeddings should be stored
+    UKB_data_path = f"{fp.UKB_DATA_PATH}"
 
     # Path components based on configuration
     path_components = {
@@ -85,9 +85,9 @@ def main(instruction, task, **kwargs):
         num_codes_in_records=50,
 
         # Data paths
-        covariates_path = data_path / "baseline_covariates_231016.feather",
-        big_dataset_path = f"{UKB_data_path}dataportal_final_records_omop_240625_mapped_eids_inpatient_updated.feather", #from Inpatient_mapping.py file
-        big_dataset_path_clmbr = f"{UKB_data_path}filtered_records_mapped_clmbrwithnames.feather",
+        covariates_path = data_path / fp.UKB_covariates_filename,
+        big_dataset_path = fp.records_path_big, #from Inpatient_mapping.py file
+        big_dataset_path_clmbr = fp.clmbr_UKB_mapping_complete_path,
 
         embeddingfile_qwen = embeddingfile_qwen if "embeddingfile_qwen" in locals() else None,
         embeddingfile_qwen3 = embeddingfile_qwen3 if "embeddingfile_qwen3" in locals() else None,

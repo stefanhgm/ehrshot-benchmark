@@ -27,12 +27,12 @@ conda env create -f environment_qwen.yml
 **Required data**
 
 - UKB data is usable in case you are an eligible researcher.
-- Different tables have to be present in specific location (change location path in [LM2Vec.py](http://LM2Vec.py) - UKB_data_path)
-    - big_dataset: dataportal_final_records_omop_240625_mapped_eids_inpatient_updated
+- Different tables have to be present in specific location (change paths in filepaths.py)
+    -  records dataset: dataportal_final_records_omop_240625
         - generated using raw UKB data, mapped following the code from https://github.com/JakobSteinfeldt/MedicalHistoryPhenomeWide/tree/cb5d2c1d60b5fe479d88f1d498f0a610b846f9b9/1_data_preparation
-        - After creating larger table with patient information, data is checked that no patient information is going over the admission date - which would be data leakage (Inpatient_mapping.py)
+        - After creating larger table with patient information, data is checked that no patient information is going over the admission date - which would be data leakage (Scripts/map_admission_ids.py required since some files do not match by patient IDs and then Scripts/Inpatient_mapping.py to prevent information leakage based on hospital stays going over the recruitment date).
     - length_of_stay_path file: contains information of patient’s length of stay in hospital - taken from UKB
-    - covariates: File containing [eid, gender, ethnic_background, birth_date] of patients. Columns should be named ['eid', 'sex_f31_0_0', 'ethnic_background_f21000_0_0', 'birth_date']
+    - covariates file: File containing [eid, gender, ethnic_background, birth_date] of patients. Columns should be named ['eid', 'sex_f31_0_0', 'ethnic_background_f21000_0_0', 'birth_date']
 - Huggingface access to models LLM2Vec, gte-Qwen2-7B-instruct and Qwen3-Embedding-8B
     - In [LLM2Vec.py](http://LLM2Vec.py) script the HF token has to be included
     - Clone LLM2Vec into Project folder (https://github.com/McGill-NLP/llm2vec) - required in LLM2Vec_embeddingscreation.py to generate LLM2Vec embeddings
@@ -44,6 +44,7 @@ conda env create -f environment_qwen.yml
 **Steps**
 
 - In file filepaths.py - filepaths are provided, adjust them to your filesystem.
+- Initially create large records table used by CLMBR and the other models based on scripts "Scripts/map_admission_ids.py", then "Scripts/Inpatient_mapping.py".
 - Generate embeddings for all models (LLM2Vec, Qwen2 and Qwen3)
     - bash script LLM2Vec_run_diseases.sh can be used. Here, most importantly, select the model (LLM2Vec/Qwen(2)/Qwen3) for which to calculate the embeddings for. In case only inference should be performed, just select the inference option.
 - Save all embeddings in a folder
