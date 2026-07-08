@@ -19,7 +19,7 @@ UKB_DATA_PATH = "/sc-projects/sc-proj-ukb-cvd/projects/llm2vec/data/"
 UKB_RECORDS_FILE_MAPPED_EIDS = UKB_DATA_PATH + "dataportal_final_records_omop_240625_mapped_eids.feather"
 
 ## map_admission_ids.py
-#
+# file containing admin codes of UKB
 UKB_RAW_ADMISSION_FILE = "/sc-projects/sc-proj-ukb-cvd/data/3_datasets_post/240625_ukb_preprocessing/ukb_data_portal/1_processed/codes_admin_231012.feather"
 
 # File created
