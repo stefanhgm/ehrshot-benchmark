@@ -1,3 +1,36 @@
+### creation of records file
+## mapping_eids_records.py
+# raw UKB data
+UKB_RAW_DATA_PATH = "/sc-projects/sc-proj-ukb-cvd/data/3_datasets_post/240625_ukb_preprocessing/ukb_data_portal/2_final/"
+
+# UKB raw data records
+UKB_RAW_DATA_RECORDS = UKB_RAW_DATA_PATH +"dataportal_final_records_omop_240625.feather"
+
+# UKB raw data covariates
+UKB_RAW_DATA_COVARIATES = UKB_RAW_DATA_PATH + "baseline_covariates_240625.feather"
+
+# mapping tsv file containing eid mappings between data versions - might not be required
+UKB_EID_MAPPING = "/sc-resources/ukb/data/shared/open/fam_files/link_file.tsv"
+
+# path containing most data
+UKB_DATA_PATH = "/sc-projects/sc-proj-ukb-cvd/projects/llm2vec/data/"
+
+# Records file with mapped patient ids
+UKB_RECORDS_FILE_MAPPED_EIDS = UKB_DATA_PATH + "dataportal_final_records_omop_240625_mapped_eids.feather"
+
+## map_admission_ids.py
+#
+UKB_RAW_ADMISSION_FILE = "/sc-projects/sc-proj-ukb-cvd/data/3_datasets_post/240625_ukb_preprocessing/ukb_data_portal/1_processed/codes_admin_231012.feather"
+
+# File created
+ADMISSION_RECRUITMENT_FILE = UKB_DATA_PATH + "codes_admin_231012_mapped_eids_filtered.feather"
+
+## Inpatient_mapping.py
+# path to records file used in main LLM2Vec.py script - created with
+records_path_big = UKB_DATA_PATH + "dataportal_final_records_omop_240625_mapped_eids_inpatient_updated.feather"
+
+
+
 ### clmbr_baseline
 ## clmbr_baseline_create_embeddings.py
 # folder containing hf models
@@ -8,8 +41,6 @@ UKB_covariates_folder = "/sc-projects/sc-proj-ukb-cvd/data/3_datasets_post/23101
 # file containing covariates including age, gender and birth date for all patients in UKB
 UKB_covariates_filename = "baseline_covariates_231016.feather"
 
-# path containing most data
-UKB_DATA_PATH ="/sc-projects/sc-proj-ukb-cvd/projects/llm2vec/data/"
 
 # path to clmbr mapping file with all available clmbr codes mapped through ATHENA
 # created with clmbr_baseline.py script
@@ -24,9 +55,6 @@ EMBEDDING_PATH = UKB_DATA_PATH + "embeddings/"
 ## clmbr_baseline
 # path to ATHENA dataset
 athena_dataset_path = "/sc-projects/sc-proj-ukb-cvd/data/mapping/athena_250220"
-
-# path to records file used in main LLM2Vec.py script
-records_path_big = UKB_DATA_PATH + "dataportal_final_records_omop_240625_mapped_eids_inpatient_updated.feather"
 
 
 ### evaluation.py
