@@ -7,7 +7,6 @@ import argparse
 import sys
 import pickle
 import pandas as pd
-import json
 import numpy as np
 from pathlib import Path
 from typing import Tuple, Protocol, List, Dict, Any, Optional, Iterable, Sequence
@@ -63,6 +62,9 @@ from utils import (
     get_patient_splits_by_idx,
 )
 
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+_ASSETS = _REPO_ROOT / "EHRSHOT_ASSETS"
+
 def resolve_instruction_from_serializations(
     tasks_serializations: Sequence[Any],
     serialization_indices: Iterable[int],
@@ -103,13 +105,13 @@ def parse_args():
     
     # Paths
     parser.add_argument("--output_dir", type=str, 
-                        default="/sc-projects/sc-proj-ukb-cvd/projects/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/llm_variants",
+                        default=str(_ASSETS / "experiments" / "llm_variants"),
                         help="Output directory for results (filename will be auto-generated)")
     parser.add_argument("--splits_path", type=str,
-                        default="/sc-projects/sc-proj-ukb-cvd/projects/ehrshot-benchmark/EHRSHOT_ASSETS/benchmark/ehrshot_splits_to_serializations.csv",
+                        default=str(_ASSETS / "benchmark" / "ehrshot_splits_to_serializations.csv"),
                         help="Path to splits to serializations CSV file")
     parser.add_argument("--serializations_path", type=str,
-                        default="/sc-projects/sc-proj-ukb-cvd/projects/ehrshot-benchmark/EHRSHOT_ASSETS/benchmark/tasks_serializations.pkl",
+                        default=str(_ASSETS / "benchmark" / "tasks_serializations.pkl"),
                         help="Path to tasks serializations pickle file")
     
     # Task selection (for array jobs - specify single task, k, replicate)
@@ -383,9 +385,7 @@ class ClassificationCollator:
 
 class llm_encoder_ft:
     """LLM encoder with LoRA fine-tuning and classification head"""
-    
-    _INSTR_PATH = "/sc-projects/sc-proj-ukb-cvd/projects/ehrshot-benchmark/ehrshot/serialization/task_to_instructions.json"
-    
+
     def __init__(
         self,
         model_name: str = "Qwen/Qwen3-Embedding-0.6B",
@@ -524,28 +524,7 @@ class llm_encoder_ft:
             early_stopping_patience=early_stopping_patience,
             early_stopping_threshold=early_stopping_threshold,
         )
-        
-        # Load instructions
-        self._instructions = self._load_instructions()
-    
-    def _load_instructions(self) -> dict:
-        try:
-            if os.path.exists(self._INSTR_PATH):
-                with open(self._INSTR_PATH, "r", encoding="utf-8") as f:
-                    return json.load(f)
-        except Exception as e:
-            logger.warning(f"Could not load instructions JSON: {e}")
-        return {}
-    
-    def _instruction_for(self, sub_task: str) -> str:
-        instr = self._instructions.get(sub_task)
-        if isinstance(instr, dict):
-            instr = instr.get("instruction", None)
-        return (
-            instr
-            or f"Does the patient have the target condition/event for '{sub_task}' at prediction time?"
-        )
-    
+
     def _fit_model(
         self,
         train_texts: List[str],
@@ -680,7 +659,12 @@ class llm_encoder_ft:
         **kwargs,
     ) -> Tuple[object, dict]:
         """Run evaluation pipeline"""
-        instruction = kwargs.get("instruction_override") or self._instruction_for(sub_task)
+        instruction = kwargs.get("instruction_override")
+        if not instruction:
+            raise ValueError(
+                "instruction_override is required: instructions must come from the "
+                "serializations pickle (entry[0]), never from a generated default"
+            )
         
         logger.critical(
             f"Start | Evaluating llm_encoder_ft (LoRA) with {self.model_name} on '{sub_task}'"
