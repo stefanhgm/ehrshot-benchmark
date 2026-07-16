@@ -262,9 +262,16 @@ class LLMFeaturizer():
     ) -> Optional[str]:
         
         ontology_name = code.split('/')[0].strip()
+        normalized_ontology_name = ontology_name.replace(" ", "_").upper()
+        normalized_excluded = {name.strip().replace(" ", "_").upper() for name in self.excluded_ontologies}
+        normalized_included = {name.strip().replace(" ", "_").upper() for name in included_ontologies}
             
         # Ignore excluded ontologies - manually include aggregated events (e.g. LOINC) if they exist
-        if (ontology_name in self.excluded_ontologies and code not in AGGREGATED_EVENTS_CODES_LOINC) and (ontology_name not in included_ontologies):
+        if (
+            normalized_ontology_name in normalized_excluded
+            and code not in AGGREGATED_EVENTS_CODES_LOINC
+            and normalized_ontology_name not in normalized_included
+        ):
             return None
                 
         # Handle special case age
