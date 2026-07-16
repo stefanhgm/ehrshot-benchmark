@@ -427,7 +427,7 @@ def main():
     # Validate required arguments
     if args.sub_task is None or args.k is None or args.replicate is None:
         print("Error: --sub_task, --k, and --replicate are required arguments")
-        print("Example: python fit_and_eval_decoder.py --sub_task guo_los --k 128 --replicate 0 --model_name Qwen/Qwen3-0.6B")
+        print("Example: python 10b_fit_and_eval_decoder.py --sub_task guo_los --k 128 --replicate 0 --model_name Qwen/Qwen3-0.6B")
         sys.exit(1)
 
     # Configure progress display
