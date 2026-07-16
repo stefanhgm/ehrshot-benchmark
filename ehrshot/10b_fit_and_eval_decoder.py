@@ -22,13 +22,6 @@ import re
 
 import sklearn
 from sklearn import metrics
-from sklearn.linear_model import LogisticRegression
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.preprocessing import MaxAbsScaler
-from sklearn.model_selection import GridSearchCV, PredefinedSplit
-from scipy.sparse import issparse
-import scipy
-import lightgbm as lgb
 import femr
 import femr.datasets
 from femr.labelers import load_labeled_patients, LabeledPatients
@@ -47,10 +40,6 @@ from utils import (
     process_chexpert_labels,
     convert_multiclass_to_binary_labels,
     CHEXPERT_LABELS,
-    LR_PARAMS,
-    XGB_PARAMS,
-    RF_PARAMS,
-    ProtoNetCLMBRClassifier,
     get_patient_splits_by_idx,
 )
 
@@ -271,147 +260,6 @@ def resolve_instruction_from_serializations(
         )
 
     return unique_instructions[0]
-
-# %%
-def tune_hyperparams(
-    X_train: np.ndarray,
-    X_val: np.ndarray,
-    y_train: np.ndarray,
-    y_val: np.ndarray,
-    model,
-    param_grid: Dict[str, List],
-    n_jobs: int = 1,
-):
-    """Hyperparameter tuning with explicit train/val split using PredefinedSplit"""
-    X: np.ndarray = (
-        scipy.sparse.vstack([X_train, X_val])
-        if issparse(X_train)
-        else np.concatenate((X_train, X_val), axis=0)
-    )
-    y: np.ndarray = np.concatenate((y_train, y_val), axis=0)
-    
-    test_fold: np.ndarray = -np.ones(X.shape[0])
-    test_fold[X_train.shape[0] :] = 0
-
-    clf = GridSearchCV(
-        model,
-        param_grid,
-        scoring="roc_auc",
-        n_jobs=n_jobs,
-        verbose=0,
-        cv=PredefinedSplit(test_fold),
-        refit=False,
-    )
-    clf.fit(X, y)
-    best_model = model.__class__(**clf.best_params_)
-    best_model.fit(X_train, y_train)
-    return best_model
-
-def run_evaluation_lr(
-    X_train: np.ndarray,
-    X_val: np.ndarray,
-    X_test: np.ndarray,
-    y_train: np.ndarray,
-    y_val: np.ndarray,
-    y_test: np.ndarray,
-    model_head: str,
-    n_jobs: int = 1,
-    test_patient_ids: np.ndarray = None,
-) -> Tuple[Any, Dict[str, float]]:
-    logger.critical(f"Start | Training {model_head}")
-    logger.info(f"Train shape: X = {X_train.shape}, Y = {y_train.shape}")
-    logger.info(f"Val shape: X = {X_val.shape}, Y = {y_val.shape}")
-    logger.info(f"Test shape: X = {X_test.shape}, Y = {y_test.shape}")
-    logger.info(f"Train prevalence:  {np.mean(y_train)}")
-    logger.info(f"Val prevalence:  {np.mean(y_val)}")
-    logger.info(f"Test prevalence:  {np.mean(y_test)}")
-    logger.info(
-        f"Test pids:  {len(test_patient_ids)} | {len(y_test)} | {len(set(test_patient_ids))}"
-    )
-
-    np.random.seed(X_train.shape[0])
-    train_shuffle_idx = np.arange(X_train.shape[0])
-    np.random.shuffle(train_shuffle_idx)
-    X_train = X_train[train_shuffle_idx]
-    y_train = y_train[train_shuffle_idx]
-
-    logger.critical(f"Start | Fitting {model_head}...")
-    model_head_parts: List[str] = model_head.split("_")
-    model_head_base: str = model_head_parts[0]
-    
-    if model_head_base == "gbm":
-        model = lgb.LGBMClassifier(random_state=0)
-        XGB_PARAMS["min_child_samples"] = [1]
-        model = tune_hyperparams(X_train, X_val, y_train, y_val, model, XGB_PARAMS, n_jobs=n_jobs)
-        logger.info(f"Best hparams: {model.get_params()}")
-    elif model_head_base == "rf":
-        RF_PARAMS["min_samples_leaf"] = [1]
-        RF_PARAMS["min_samples_split"] = [2]
-        model = RandomForestClassifier(random_state=0)
-        model = tune_hyperparams(X_train, X_val, y_train, y_val, model, RF_PARAMS, n_jobs=n_jobs)
-        logger.info(f"Best hparams: {model.get_params()}")
-    elif model_head_base == "lr":
-        solver: str = model_head_parts[1]
-        scaler = MaxAbsScaler().fit(X_train)
-        X_train = scaler.fit_transform(X_train)
-        X_val = scaler.transform(X_val)
-        X_test = scaler.transform(X_test)
-        model = LogisticRegression(
-            n_jobs=1, penalty="l2", tol=0.0001, solver=solver, max_iter=1000, random_state=0
-        )
-        model = tune_hyperparams(X_train, X_val, y_train, y_val, model, LR_PARAMS, n_jobs=n_jobs)
-        logger.info(f"Best hparams: {model.get_params()}")
-    elif model_head_base == "protonet":
-        model = ProtoNetCLMBRClassifier()
-        model.fit(X_train, y_train)
-    else:
-        raise ValueError(f"Model head `{model_head}` not supported.")
-    
-    logger.critical(f"Finish | Fitting {model_head}...")
-
-    y_train_proba = model.predict_proba(X_train)[::, 1]
-    y_val_proba = model.predict_proba(X_val)[::, 1]
-    y_test_proba = model.predict_proba(X_test)[::, 1]
-
-    metric_dict = {
-        "auroc": metrics.roc_auc_score,
-        "brier": metrics.brier_score_loss,
-        "auprc": metrics.average_precision_score,
-    }
-
-    scores = {}
-    for metric, func in metric_dict.items():
-        scores[metric] = {}
-        train_score = func(y_train, y_train_proba)
-        val_score = func(y_val, y_val_proba)
-        test_score = func(y_test, y_test_proba)
-
-        logger.info(f"Train {metric} score: {train_score}")
-        logger.info(f"Val {metric} score:   {val_score}")
-        logger.info(f"Test {metric} score:  {test_score}")
-
-        test_set = sorted(list(set(test_patient_ids)))
-        score_list = []
-        
-        for i in range(1000):
-            sample = sklearn.utils.resample(test_set, random_state=i)
-            counts = collections.Counter(sample)
-            weights = np.zeros_like(test_patient_ids)
-            for i, p in enumerate(test_patient_ids):
-                weights[i] = counts[p]
-            score_val = func(y_test, y_test_proba, sample_weight=weights)
-            score_list.append(score_val)
-
-        lower, upper = np.percentile(score_list, [2.5, 97.5])
-        std = np.std(score_list, ddof=1)
-
-        scores[metric]["score"] = test_score
-        scores[metric]["std"] = std
-        scores[metric]["lower"] = lower
-        scores[metric]["mean"] = np.mean(score_list)
-        scores[metric]["upper"] = upper
-
-    return model, scores
 
 def parse_args():
     """Parse command line arguments"""
