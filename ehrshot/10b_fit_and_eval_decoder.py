@@ -7,7 +7,6 @@ import argparse
 import sys
 import pickle
 import pandas as pd
-import json
 import numpy as np
 from pathlib import Path
 from typing import Tuple, Protocol, List, Dict, Any, Optional, Set, Iterable, Sequence
@@ -39,6 +38,21 @@ import transformers
 from transformers import AutoTokenizer, AutoModelForCausalLM, Trainer, TrainingArguments, EarlyStoppingCallback
 from peft import LoraConfig, TaskType, get_peft_model
 from torch.utils.data import Dataset
+
+from utils import (
+    LABELING_FUNCTION_2_PAPER_NAME,
+    SHOT_STRATS,
+    MODEL_2_INFO,
+    get_labels_and_features,
+    process_chexpert_labels,
+    convert_multiclass_to_binary_labels,
+    CHEXPERT_LABELS,
+    LR_PARAMS,
+    XGB_PARAMS,
+    RF_PARAMS,
+    ProtoNetCLMBRClassifier,
+    get_patient_splits_by_idx,
+)
 
 # --- In-context learning (ICL) sampling and prompt budgeting ---
 # Inlined so this script has no cross-module dependency on experiment code.
@@ -220,27 +234,8 @@ def render_prompt_with_icl_budget(
     return _build(ehr_ids[:-overflow])
 # --- end ICL sampling ---
 
-from serialization.text_encoder import (
-    TextEncoder,
-    Qwen3Embedding_8B_Encoder,
-    Qwen3Embedding_4B_Encoder,
-    Qwen3Embedding_0_6B_Encoder,
-)
-
-from utils import (
-    LABELING_FUNCTION_2_PAPER_NAME,
-    SHOT_STRATS,
-    MODEL_2_INFO,
-    get_labels_and_features,
-    process_chexpert_labels,
-    convert_multiclass_to_binary_labels,
-    CHEXPERT_LABELS,
-    LR_PARAMS,
-    XGB_PARAMS,
-    RF_PARAMS,
-    ProtoNetCLMBRClassifier,
-    get_patient_splits_by_idx,
-)
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+_ASSETS = _REPO_ROOT / "EHRSHOT_ASSETS"
 
 # %%
 def resolve_instruction_from_serializations(
@@ -424,13 +419,13 @@ def parse_args():
     
     # Paths
     parser.add_argument("--output_dir", type=str, 
-                        default="/sc-projects/sc-proj-ukb-cvd/projects/ehrshot-benchmark/EHRSHOT_ASSETS/experiments/llm_variants",
+                        default=str(_ASSETS / "experiments" / "llm_variants"),
                         help="Output directory for results (filename will be auto-generated)")
     parser.add_argument("--splits_path", type=str,
-                        default="/sc-projects/sc-proj-ukb-cvd/projects/ehrshot-benchmark/EHRSHOT_ASSETS/benchmark/ehrshot_splits_to_serializations.csv",
+                        default=str(_ASSETS / "benchmark" / "ehrshot_splits_to_serializations.csv"),
                         help="Path to splits to serializations CSV file")
     parser.add_argument("--serializations_path", type=str,
-                        default="/sc-projects/sc-proj-ukb-cvd/projects/ehrshot-benchmark/EHRSHOT_ASSETS/benchmark/tasks_serializations.pkl",
+                        default=str(_ASSETS / "benchmark" / "tasks_serializations.pkl"),
                         help="Path to tasks serializations pickle file")
     
     # Task selection (for array jobs - specify single task, k, replicate)
@@ -675,84 +670,6 @@ class llm_classifier(Protocol):
         test_patient_ids: np.ndarray | None = None,
         **kwargs,
     ) -> Tuple[object, dict]: ...
-
-# %%
-class llm_encoder:
-    """LLM encoder using Qwen3-Embedding with logistic regression head"""
-    
-    _INSTR_PATH = "/sc-projects/sc-proj-ukb-cvd/projects/ehrshot-benchmark/ehrshot/serialization/task_to_instructions.json"
-
-    def __init__(self, model_size: str = "8B", max_input_length: int = 4096):
-        self.model_size = model_size
-        self.max_input_length = max_input_length
-        self._instructions = self._load_instructions()
-
-        if model_size == "8B":
-            self._backbone = Qwen3Embedding_8B_Encoder(max_input_length=max_input_length)
-        elif model_size == "4B":
-            self._backbone = Qwen3Embedding_4B_Encoder(max_input_length=max_input_length)
-        elif model_size in {"0.6B", "0_6B", "0.6b"}:
-            self._backbone = Qwen3Embedding_0_6B_Encoder(max_input_length=max_input_length)
-        else:
-            raise ValueError(
-                f"Unsupported Qwen3 size: {model_size}. Use '8B' (default), '4B', or '0.6B'."
-            )
-        self._encoder = TextEncoder(self._backbone)
-
-    def _load_instructions(self) -> dict:
-        path = Path(self._INSTR_PATH)
-        if not path.exists():
-            raise FileNotFoundError(f"Instruction file not found: {self._INSTR_PATH}")
-        with open(path, "r") as f:
-            return json.load(f)
-
-    def _instruction_for(self, sub_task: str) -> str:
-        instruction_prefix = self._instructions.get("instruction_prefix", "")
-        instruction = self._instructions.get(sub_task, "")
-        if instruction_prefix != "":
-            instruction = f"{instruction_prefix} {instruction}"
-        assert isinstance(instruction, str), f"Instruction for task {sub_task} must be a string"
-        return instruction
-
-    def _encode_texts_with_instruction(self, texts: list[str], sub_task: str) -> np.ndarray:
-        instr = self._instruction_for(sub_task)
-        instructions = [instr] * len(texts)
-        return self._encoder.encode_texts(instructions=instructions, texts=texts, cache_dir=None)
-
-    def run_evaluation(
-        self,
-        sub_task: str,
-        X_train_texts: list[str],
-        X_val_texts: list[str],
-        X_test_texts: list[str],
-        y_train: np.ndarray,
-        y_val: np.ndarray,
-        y_test: np.ndarray,
-        n_jobs: int = 1,
-        test_patient_ids: np.ndarray | None = None,
-        *,
-        lr_solver: str = "lbfgs",
-        eval_train_val: bool = False,
-    ) -> Tuple[object, dict]:
-        X_train = self._encode_texts_with_instruction(X_train_texts, sub_task=sub_task)
-        X_val = self._encode_texts_with_instruction(X_val_texts, sub_task=sub_task)
-        X_test = self._encode_texts_with_instruction(X_test_texts, sub_task=sub_task)
-
-        _ = eval_train_val  # Unused; included for API compatibility with decoder variants
-
-        model_head = f"lr_{lr_solver}"
-        best_model, scores = run_evaluation_lr(
-            X_train=X_train,
-            X_val=X_val,
-            X_test=X_test,
-            y_train=y_train,
-            y_val=y_val,
-            y_test=y_test,
-            model_head=model_head,
-            n_jobs=n_jobs,
-            test_patient_ids=test_patient_ids,
-        )
-        return best_model, scores
 
 # %%
 def _find_subsequence(haystack: List[int], needle: List[int]) -> Optional[int]:
@@ -1081,8 +998,6 @@ class LLMDecoderQwen3:
 # %%
 class llm_decoder:
     """LLM decoder classifier without fine-tuning"""
-    
-    _INSTR_PATH = "/sc-projects/sc-proj-ukb-cvd/projects/ehrshot-benchmark/ehrshot/serialization/task_to_instructions.json"
 
     def __init__(
         self,
@@ -1122,25 +1037,6 @@ class llm_decoder:
             yarn_original_max_position_embeddings=yarn_original_max_position_embeddings,
             icl_examples_max_tokens=icl_examples_max_tokens,
             base_prompt_max_tokens=base_prompt_max_tokens,
-        )
-        self._instructions = self._load_instructions()
-
-    def _load_instructions(self) -> dict:
-        try:
-            if os.path.exists(self._INSTR_PATH):
-                with open(self._INSTR_PATH, "r", encoding="utf-8") as f:
-                    return json.load(f)
-        except Exception as e:
-            logger.warning(f"Could not load instructions JSON: {e}")
-        return {}
-
-    def _instruction_for(self, sub_task: str) -> str:
-        instr = self._instructions.get(sub_task)
-        if isinstance(instr, dict):
-            instr = instr.get("instruction", None)
-        return (
-            instr
-            or f"Does the patient have the target condition/event for '{sub_task}' at prediction time?"
         )
 
     def _build_icl_examples(
@@ -1236,7 +1132,12 @@ class llm_decoder:
         eval_train_val: bool = False,
         **kwargs,
     ) -> Tuple[object, dict]:
-        question = kwargs.get("question_override") or self._instruction_for(sub_task)
+        question = kwargs.get("question_override")
+        if not question:
+            raise ValueError(
+                "question_override is required: instructions must come from the "
+                "serializations pickle (entry[0]), never from a generated default"
+            )
 
         logger.critical(f"Start | Evaluating llm_decoder with {self.model_name} on '{sub_task}'")
         logger.info(
@@ -1752,7 +1653,12 @@ class llm_decoder_ft(llm_decoder):
         eval_train_val: bool = False,
         **kwargs,
     ):
-        question = kwargs.get("question_override") or self._instruction_for(sub_task)
+        question = kwargs.get("question_override")
+        if not question:
+            raise ValueError(
+                "question_override is required: instructions must come from the "
+                "serializations pickle (entry[0]), never from a generated default"
+            )
 
         logger.critical(
             f"Start | Evaluating llm_decoder_ft (LoRA) with {self.model_name} on '{sub_task}'"
