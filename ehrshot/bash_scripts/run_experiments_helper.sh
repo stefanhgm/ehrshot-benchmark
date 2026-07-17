@@ -3,17 +3,6 @@
 #SBATCH --output=logs/ehrshot_%A.log
 #SBATCH --time=2-00:00:00
 #SBATCH --cpus-per-task=40
-# --qos=long_job 
-
-# 8-GPU setups (pgpu partition) 
-# Available node types:
-#   - DGX A100 80GB (128 cpus, 2TB):  s-sc-dgx01, s-sc-dgx02
-#   - H100 80GB (96 cpus, 2TB):       s-sc-pgpu08
-#   - H200 141GB (96 cpus, 2TB):      s-sc-pgpu11–15
-# 4-GPU setups (pgpu partition)
-# Available node types:
-#   - A100 SXM4 40GB (128 cpus, 493GB):  s-sc-pgpu01, s-sc-pgpu02
-#   - A100 SXM4 80GB (128 cpus, 493GB):  s-sc-pgpu03, s-sc-pgpu04, s-sc-pgpu05, s-sc-pgpu06, s-sc-pgpu07
 
 # Any 8 GPUs node
 #SBATCH --partition=pgpu
@@ -21,22 +10,6 @@
 #SBATCH --cpus-per-task=96
 #SBATCH --mem=1950G
 #SBATCH --exclusive
-
-# Only H200
-##SBATCH --partition=pgpu
-##SBATCH --gres=gpu:8
-##SBATCH --cpus-per-task=96
-##SBATCH --mem=1950G
-##SBATCH --exclusive
-##SBATCH --exclude=s-sc-dgx01,s-sc-dgx02,s-sc-pgpu08
-
-# Only DGX A100
-##SBATCH --partition=pgpu
-##SBATCH --gres=gpu:8
-##SBATCH --cpus-per-task=96
-##SBATCH --mem=1950G
-##SBATCH --exclusive
-##SBATCH --exclude=s-sc-pgpu08,s-sc-pgpu11,s-sc-pgpu12,s-sc-pgpu13,s-sc-pgpu14,s-sc-pgpu15
 
 # Any 4 GPUs node with 80GB GPU
 ##SBATCH --partition=pgpu
