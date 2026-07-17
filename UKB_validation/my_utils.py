@@ -4,8 +4,8 @@ import numpy as np
 import ast
 
 
-## file containing patient splits
-path_to_splits = "/sc-projects/sc-proj-ukb-cvd/projects/llm2vec/data/splits.json"
+## file containing patient splits (built from UKB_PROJECT_DIR in .env; see filepaths.py)
+from filepaths import PATH_TO_SPLIT_CSV as path_to_splits
 
 
 

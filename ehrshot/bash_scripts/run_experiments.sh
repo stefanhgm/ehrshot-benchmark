@@ -1,8 +1,14 @@
+# Load configuration (paths + conda envs) from the repo-root .env file
+SCRIPT_DIR_SELF="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+set -a
+source "$SCRIPT_DIR_SELF/../../.env"
+set +a
+
 # Options
 num_threads=32
-EHRSHOT_ENV="/sc-projects/sc-proj-dh-ag-eils-ml/shared_envs/EHRSHOT_ENV_QWEN3" # Set to EHRSHOT_ENV_QWEN3 for Qwen3, EHRSHOT_ENV for Llama3 and GteQwen2
+EHRSHOT_ENV="$EHRSHOT_CONDA_ENV" # Set EHRSHOT_CONDA_ENV in .env (e.g. EHRSHOT_ENV_QWEN3 for Qwen3, EHRSHOT_ENV for Llama3 and GteQwen2)
 # Make conda activate work in non-interactive shells
-source /opt/miniforge/etc/profile.d/conda.sh
+source "$CONDA_PROFILE_SCRIPT"
 conda activate "$EHRSHOT_ENV"
 
 # avoid ~/.local site-packages interfering
@@ -29,7 +35,7 @@ echo "==============="
 
 # Paths
 EXPERIMENT_IDENTIFIER="full_run_codes_list"
-BASE_DIR="/home/sthe14/ehrshot-benchmark"
+BASE_DIR="${EHRSHOT_BENCHMARK_DIR%/}"
 SCRIPT_DIR="$BASE_DIR/ehrshot"
 INSTRUCTIONS_FILE="${BASE_DIR}/ehrshot/serialization/task_to_instructions_list.json"
 
@@ -154,7 +160,7 @@ for text_encoder in "${text_encoders[@]}"; do
                         cmd="bash"
                         [[ " $* " == *" --is_use_slurm "* ]] && cmd="sbatch"
 
-                        $cmd /home/sthe14/ehrshot-benchmark/ehrshot/bash_scripts/run_experiments_helper.sh \
+                        $cmd "$BASE_DIR/ehrshot/bash_scripts/run_experiments_helper.sh" \
                             $BASE_DIR \
                             $experiment_dir \
                             $BASE_DIR/EHRSHOT_ASSETS/femr/extract \

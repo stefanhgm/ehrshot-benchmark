@@ -1,7 +1,14 @@
 #!/bin/bash
 
 
-CODE_DIR=~/Documents/ehrshot-benchmark/UKB_validation/bash_scripts
+# Load configuration from the repo-root .env file; exported vars propagate to the
+# child jobs submitted below via `sbatch --export=ALL`.
+SCRIPT_DIR_SELF="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+set -a
+source "$SCRIPT_DIR_SELF/../../.env"
+set +a
+
+CODE_DIR="${EHRSHOT_BENCHMARK_DIR%/}/UKB_validation/bash_scripts"
 
 cd $CODE_DIR
 

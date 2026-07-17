@@ -134,7 +134,7 @@ def get_labels_and_features(PATH_TO_LABELLED_PATIENTS, embedding_path, task, cou
     return label_patient_ids, label_values, featurizations
 
 
-# PATH_TO_LABELLED_PATIENTS = "/home/gear11/Documents/LLM2Vec_project/Splits/generate_labels_2/labeled_patients_hospitalization.csv"
+# PATH_TO_LABELLED_PATIENTS = os.path.join(fp.PATH_TO_LABELED_PATIENTS_FOLDER, "labeled_patients_hospitalization.csv")
 # label_patient_ids, label_values, feature_matrixes = get_labels_and_features(PATH_TO_LABELLED_PATIENTS)
 # feature_matrixes
 
@@ -279,7 +279,7 @@ def main_evaluation(disease, phecode, clmbrcodes=False, counts_df=None, counts_e
     IS_FORCE_REFRESH=False
     NUM_THREADS = 20
     PATH_TO_OUTPUT_DIR = "./Results_new/"
-    #PATH_TO_OUTPUT_DIR = "/sc-projects/sc-proj-ukb-cvd/projects/llm2vec/Results_Revision2/"
+    #PATH_TO_OUTPUT_DIR = os.path.join(fp.UKB_PROJECT_DIR, "Results_Revision2/")
     PATH_TO_OUTPUT_FILE = os.path.join(PATH_TO_OUTPUT_DIR, f'{LABELING_FUNCTION}_{SHOT_STRAT}_results{clmbraddition}.csv')
     PATH_TO_PROBA_OUTPUT_FILE: str = os.path.join(PATH_TO_OUTPUT_DIR, f'{LABELING_FUNCTION}_{SHOT_STRAT}_probas{clmbraddition}.csv')
 

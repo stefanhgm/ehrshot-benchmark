@@ -354,4 +354,3 @@ dependencies:
       - triton==3.4.0
       - typing-inspection==0.4.1
       - wandb==0.21.1
-prefix: /sc-projects/sc-proj-ukb-cvd/environments/Qwen

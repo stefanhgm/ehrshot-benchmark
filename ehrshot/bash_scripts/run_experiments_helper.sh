@@ -67,7 +67,7 @@ fi
 
 # TODO: For multi-gpu setup
 # CUDA_VISIBLE_DEVICES=0 
-python /home/sthe14/ehrshot-benchmark/ehrshot/run_experiments.py \
+python "$1/ehrshot/run_experiments.py" \
     --base_dir $1 \
     --experiment_folder $2 \
     --path_to_database $3 \

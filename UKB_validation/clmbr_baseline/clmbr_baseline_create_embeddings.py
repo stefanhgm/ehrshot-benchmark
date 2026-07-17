@@ -245,7 +245,7 @@ else:
     # Convert to tensor format
     #tensor_batches = []
 
-    #output_path_csv = "/sc-projects/sc-proj-ukb-cvd/projects/llm2vec/data/embeddings/embeddings_clmbr_1024-1.csv"
+    #output_path_csv = f"{fp.embeddings_path}/embeddings_clmbr_1024-1.csv"
     output_path_feather = f"{fp.embeddings_path}/embeddings_clmbr_{tokens_per_batch}-1.feather"
 
     #with open (output_path_feather, 'wb') as filename:

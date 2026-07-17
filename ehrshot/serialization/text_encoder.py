@@ -256,7 +256,7 @@ class LLM2VecLlama2_Sheared_1_3B_SupervisedEncoder(LLM2VecLLMEncoder):
 #         peft_model_name_or_path = "McGill-NLP/LLM2Vec-Meta-Llama-31-8B-Instruct-mntp-supervised"
 #         if 'custom_path' in kwargs:
 #             # TODO: Added reproducibility path
-#             model_path = "/home/sthe14/llm2vec-repro/output"
+#             model_path = os.path.expanduser("~/llm2vec-repro/output")
 #             peft_model_name_or_path = model_path + kwargs['custom_path']
 #         # Changed this to updated loading instructions from https://huggingface.co/McGill-NLP/LLM2Vec-Meta-Llama-31-8B-Instruct-mntp-supervised
 #         self.model = LLM2Vec.from_pretrained(

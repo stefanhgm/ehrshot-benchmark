@@ -17,11 +17,17 @@ modelname="$5"
 # Run the program (replace "your_program" with the actual command)
 echo "Running program for disease: $disease with phecode: $phecode"
 
-CODE_DIR=~/Documents/ehrshot-benchmark/UKB_validation
+# Load configuration from the repo-root .env file (also inherited via `sbatch --export=ALL`)
+SCRIPT_DIR_SELF="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+set -a
+[ -f "$SCRIPT_DIR_SELF/../../.env" ] && source "$SCRIPT_DIR_SELF/../../.env"
+set +a
+
+CODE_DIR="${EHRSHOT_BENCHMARK_DIR%/}/UKB_validation"
 
 cd $CODE_DIR
 
-export HF_HOME=/sc-projects/sc-proj-dh-ag-eils-ml/shared_hf_cache
+export HF_HOME="${HUGGINGFACE_CACHE%/}"
 
 cmd="conda run -p LLM2Vec python3 ./LLM2Vec.py \
   --indication \"$disease\" \

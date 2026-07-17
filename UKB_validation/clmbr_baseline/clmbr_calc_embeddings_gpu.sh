@@ -9,12 +9,18 @@
 #SBATCH -o ./logs/job_%j.out
 
 
-CODE_DIR=~/Documents/ehrshot-benchmark/UKB_validation/clmbr_baseline
+# Load configuration from the repo-root .env file (also inherited via `sbatch --export=ALL`)
+SCRIPT_DIR_SELF="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+set -a
+[ -f "$SCRIPT_DIR_SELF/../../.env" ] && source "$SCRIPT_DIR_SELF/../../.env"
+set +a
+
+CODE_DIR="${EHRSHOT_BENCHMARK_DIR%/}/UKB_validation/clmbr_baseline"
 
 cd $CODE_DIR
 
 source ~/.bashrc
 
-conda activate /sc-projects/sc-proj-ukb-cvd/environments/LLM
+conda activate "$UKB_CONDA_ENV"
 
 python3 ./clmbr_baseline_create_embeddings.py 

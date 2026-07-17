@@ -71,9 +71,9 @@ def main(args):
     # TODO: Unclear if these patient representations remain the same for different patient subgroups (e.g., only new_*)
     # For now just link to representation for all patients via symlinks
     # feature_files = {
-    #     'count_features': '/home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/features/count_features.pkl',
-    #     'clmbr_features': '/home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/features/clmbr_features.pkl',
-    #     'agr_features': '/home/sthe14/ehrshot-benchmark/EHRSHOT_ASSETS/features/agr_features.pkl',
+    #     'count_features': f'{os.environ["EHRSHOT_BENCHMARK_DIR"]}/EHRSHOT_ASSETS/features/count_features.pkl',
+    #     'clmbr_features': f'{os.environ["EHRSHOT_BENCHMARK_DIR"]}/EHRSHOT_ASSETS/features/clmbr_features.pkl',
+    #     'agr_features': f'{os.environ["EHRSHOT_BENCHMARK_DIR"]}/EHRSHOT_ASSETS/features/agr_features.pkl',
     # }
     # for feature_name, feature_file in feature_files.items():
     #     feature_symlink = os.path.join(args.experiment_folder, f'{feature_name}.pkl')

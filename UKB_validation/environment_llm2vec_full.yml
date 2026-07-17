@@ -343,4 +343,3 @@ dependencies:
       - wandb==0.19.8
       - xxhash==3.5.0
       - yarl==1.18.3
-prefix: /sc-projects/sc-proj-ukb-cvd/environments/LLM2Vec
