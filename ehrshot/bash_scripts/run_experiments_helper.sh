@@ -11,14 +11,6 @@
 #SBATCH --mem=1950G
 #SBATCH --exclusive
 
-# Any 4 GPUs node with 80GB GPU
-##SBATCH --partition=pgpu
-##SBATCH --gres=gpu:4
-##SBATCH --cpus-per-task=128
-##SBATCH --mem=480G
-##SBATCH --exclusive
-##SBATCH --exclude=s-sc-pgpu01,s-sc-pgpu02,s-sc-pgpu03,s-sc-pgpu04
-
 # Single GPU resources: 
 ##SBATCH --partition=gpu
 ##SBATCH --gres=gpu:nvidia_a100_80gb_pcie:1
