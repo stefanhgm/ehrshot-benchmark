@@ -78,6 +78,8 @@ text_encoders=(
     # "deberta_v3_large-concat"
     # "bert_base-concat"
     # "bert_large-concat"
+    # "bioclinical_modernbert_base"
+    # "bioclinical_modernbert_large"
 )
 
 serialization_strategies=(

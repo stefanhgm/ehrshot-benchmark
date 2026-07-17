@@ -156,9 +156,10 @@ if __name__ == "__main__":
         'bert_large-concat': lambda max_input_length: BertEncoder(max_input_length=max_input_length, bert_identifier='bert-large-uncased', embedding_size=1024, model_max_input_length=512, concat_embeddings=True),
         'deberta_v3_base-concat': lambda max_input_length: BertEncoder(max_input_length=max_input_length, bert_identifier='microsoft/deberta-v3-base', embedding_size=768, model_max_input_length=512, concat_embeddings=True),
         'deberta_v3_large-concat': lambda max_input_length: BertEncoder(max_input_length=max_input_length, bert_identifier='microsoft/deberta-v3-large', embedding_size=1024, model_max_input_length=512, concat_embeddings=True),
-        # Modern Bert models could handle 8192 tokens, but only use them with 4096 tokens
-        'modernbert_base': lambda max_input_length: BertEncoder(max_input_length=max_input_length, bert_identifier='answerdotai/ModernBERT-base', embedding_size=768, model_max_input_length=4096),
-        'modernbert_large': lambda max_input_length: BertEncoder(max_input_length=max_input_length, bert_identifier='answerdotai/ModernBERT-large', embedding_size=1024, model_max_input_length=4096),
+        # BioClinical ModernBERT: native 8192-token context (no chunking) and receives the
+        # same instruct+EHR input as the LLM embedding models (include_instruction=True).
+        'bioclinical_modernbert_base': lambda max_input_length: BertEncoder(max_input_length=max_input_length, bert_identifier='thomas-sounack/BioClinical-ModernBERT-base', embedding_size=768, model_max_input_length=8192, include_instruction=True),
+        'bioclinical_modernbert_large': lambda max_input_length: BertEncoder(max_input_length=max_input_length, bert_identifier='thomas-sounack/BioClinical-ModernBERT-large', embedding_size=1024, model_max_input_length=8192, include_instruction=True),
     }
 
     # First check custom llm2vec model, than look up in mapping

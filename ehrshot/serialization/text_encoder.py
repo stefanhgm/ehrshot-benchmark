@@ -441,12 +441,16 @@ class STGTELargeENv15Encoder(LLMEncoder):
 
 class BertEncoder(BERTLLMEncoder):
     
-    def __init__(self, max_input_length: int, bert_identifier: str, embedding_size: int, model_max_input_length: int, concat_embeddings: bool = False, **kwargs) -> None:
+    def __init__(self, max_input_length: int, bert_identifier: str, embedding_size: int, model_max_input_length: int, concat_embeddings: bool = False, include_instruction: bool = False, **kwargs) -> None:
         # use variable bert_identifier, embedding_size, model_max_input_length to allow for different BERT models
-        super().__init__(embedding_size=embedding_size, model_max_input_length=model_max_input_length, max_input_length=max_input_length)  
+        super().__init__(embedding_size=embedding_size, model_max_input_length=model_max_input_length, max_input_length=max_input_length)
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.tokenizer = AutoTokenizer.from_pretrained(bert_identifier)
 
+        # When True, prepend the task-specific instruction to each text so the (mean-pooled)
+        # embedding is guided by it - used for long-context encoders (e.g. BioClinical ModernBERT)
+        # that receive the same instruct+EHR input as the LLM embedding models.
+        self.include_instruction = include_instruction
         self.concat_embeddings = concat_embeddings
         self.per_chunk_embedding_size = embedding_size
         if self.concat_embeddings:
@@ -468,6 +472,14 @@ class BertEncoder(BERTLLMEncoder):
         if torch.cuda.device_count() > 1:
             print(f"Using {torch.cuda.device_count()} GPUs.")
             self.model = torch.nn.DataParallel(self.model)
+
+    def add_instruction(self, instruction: str, text: str) -> Any:
+        # BioClinical ModernBERT was not trained on the Qwen3 "Instruct:/Query:" template,
+        # so use a simple natural prepend. Disabled by default (default BERT baselines
+        # ignore the instruction, matching their original behaviour).
+        if self.include_instruction and instruction is not None and len(instruction) > 0:
+            return f'{instruction}\n\n{text}'
+        return text
 
     def _encode(self, inputs: List, **kwargs) -> NDArray[Any]:
         # Use multiples of this base input length to determine the max number of chunks, e.g. for 2k chunks use max number of 4
