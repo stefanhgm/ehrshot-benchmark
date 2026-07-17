@@ -393,11 +393,9 @@ if __name__ == '__main__':
     wandb.login()
 
     if(args.disable_wandb):
-        #wandb.init(project="LLM2Vec", entity="georg-von-arnim-berlin-institute-of-health", mode="disabled")
         wandb.init(project="LLM2Vec", entity="cardiors", mode="disabled")
     else:
         wandb.init(project="LLM2Vec", entity="cardiors", name=wandbname)
-        #wandb.init(project="LLM2Vec", entity="georg-von-arnim-berlin-institute-of-health", mode="disabled")
 
 
 
