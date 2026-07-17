@@ -8,11 +8,6 @@ assets*
 # C extensions
 *.so
 
-logs
-ehrshot/logs/
-data
-EHRSHOT_ASSETS*
-
 # Distribution / packaging
 .Python
 build/
@@ -166,4 +161,11 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 
+# Project specific
+logs
+ehrshot/logs/
+data
+EHRSHOT_ASSETS/*
+!EHRSHOT_ASSETS/.gitkeep
+EHRSHOT_ASSETS_BASELINES/
 wandb/
