@@ -1,0 +1,1885 @@
+#!/usr/bin/env python3
+"""
+Run LLM variants experiments with command line arguments support
+"""
+
+import argparse
+import sys
+import pickle
+import pandas as pd
+import numpy as np
+from pathlib import Path
+from typing import Tuple, Protocol, List, Dict, Any, Optional, Set, Iterable, Sequence
+import os
+import collections
+import torch
+import tqdm
+import math
+import random
+import logging
+from dataclasses import dataclass
+import re
+
+import sklearn
+from sklearn import metrics
+import femr
+import femr.datasets
+from femr.labelers import load_labeled_patients, LabeledPatients
+from loguru import logger
+
+import transformers
+from transformers import AutoTokenizer, AutoModelForCausalLM, Trainer, TrainingArguments, EarlyStoppingCallback
+from peft import LoraConfig, TaskType, get_peft_model
+from torch.utils.data import Dataset
+
+from utils import (
+    LABELING_FUNCTION_2_PAPER_NAME,
+    SHOT_STRATS,
+    MODEL_2_INFO,
+    get_labels_and_features,
+    process_chexpert_labels,
+    convert_multiclass_to_binary_labels,
+    CHEXPERT_LABELS,
+    get_patient_splits_by_idx,
+)
+
+# --- In-context learning (ICL) sampling and prompt budgeting ---
+# Inlined so this script has no cross-module dependency on experiment code.
+SUPPORTED_ICL_SHOTS = (0, 2, 4, 6)
+
+
+@dataclass(frozen=True)
+class ICLExample:
+    index: int
+    label: int
+    text: str
+
+
+def validate_icl_shots(shot_count: int) -> int:
+    if shot_count not in SUPPORTED_ICL_SHOTS:
+        raise ValueError(f"Unsupported --icl_shots={shot_count}. Supported values: {SUPPORTED_ICL_SHOTS}")
+    return shot_count
+
+
+def select_icl_example_indices(
+    labels: Sequence[int],
+    shot_count: int,
+    seed: int,
+    forbidden_indices: Optional[Set[int]] = None,
+) -> List[int]:
+    """Select deterministic ICL examples with balanced labels when feasible."""
+    validate_icl_shots(shot_count)
+    total = len(labels)
+    if shot_count == 0 or total == 0:
+        return []
+    forbidden = set(forbidden_indices or set())
+    available = [i for i in range(total) if i not in forbidden]
+    if not available:
+        return []
+
+    target = min(shot_count, len(available))
+    rng = random.Random(seed)
+
+    pos = [i for i in available if int(labels[i]) == 1]
+    neg = [i for i in available if int(labels[i]) == 0]
+
+    rng.shuffle(pos)
+    rng.shuffle(neg)
+
+    target_pos = min(len(pos), target // 2)
+    target_neg = min(len(neg), target // 2)
+    chosen: List[int] = pos[:target_pos] + neg[:target_neg]
+
+    if len(chosen) < target:
+        remainder = pos[target_pos:] + neg[target_neg:]
+        rng.shuffle(remainder)
+        chosen.extend(remainder[: target - len(chosen)])
+
+    rng.shuffle(chosen)
+    return chosen[:target]
+
+
+def format_icl_examples(icl_examples: Sequence[ICLExample]) -> str:
+    if not icl_examples:
+        return ""
+
+    lines = ["In-context examples:"]
+    for i, example in enumerate(icl_examples, start=1):
+        answer = "Yes" if int(example.label) == 1 else "No"
+        lines.extend(
+            [
+                f"Example {i}:",
+                f"Patient record:\n{example.text}",
+                f"Answer: {answer}",
+            ]
+        )
+
+    lines.append("Now classify this patient record:")
+    return "\n\n".join(lines) + "\n\n"
+
+
+def render_prompt_with_icl_budget(
+    tokenizer,
+    task_instruction: str,
+    ehr_text: str,
+    icl_examples: Sequence[ICLExample],
+    max_context_tokens: int,
+    enable_thinking: bool,
+    reserve_tokens: int = 0,
+    icl_examples_max_tokens: int | None = None,
+    base_prompt_max_tokens: int | None = None,
+) -> str:
+    """Render a chat prompt that always fits the target token budget."""
+    sys = (
+        f"Question: {task_instruction}\n\n"
+        "Answer STRICTLY with a single token: Yes or No. No punctuation, no extra words."
+    )
+    def _truncate_text(text: str, max_tokens: int | None) -> str:
+        if max_tokens is None or max_tokens <= 0 or not text:
+            return text
+        ids = tokenizer(
+            text,
+            add_special_tokens=False,
+            truncation=True,
+            max_length=max_tokens,
+        ).input_ids
+        return tokenizer.decode(ids, skip_special_tokens=True)
+
+    truncated_icl_examples = [
+        ICLExample(
+            index=example.index,
+            label=example.label,
+            text=_truncate_text(example.text, icl_examples_max_tokens),
+        )
+        for example in icl_examples
+    ]
+    user_prefix = format_icl_examples(truncated_icl_examples)
+
+    messages_base = [
+        {"role": "system", "content": sys},
+        {"role": "user", "content": user_prefix},
+    ]
+    text_base = tokenizer.apply_chat_template(
+        messages_base,
+        tokenize=False,
+        add_generation_prompt=True,
+        enable_thinking=enable_thinking,
+    )
+    base_len = len(tokenizer(text_base, add_special_tokens=False).input_ids)
+    base_prompt_messages = [
+        {"role": "system", "content": sys},
+        {"role": "user", "content": ""},
+    ]
+    base_prompt_text = tokenizer.apply_chat_template(
+        base_prompt_messages,
+        tokenize=False,
+        add_generation_prompt=True,
+        enable_thinking=enable_thinking,
+    )
+    base_prompt_len = len(tokenizer(base_prompt_text, add_special_tokens=False).input_ids)
+    budget = max_context_tokens - base_len - max(0, reserve_tokens)
+    if base_prompt_max_tokens is not None:
+        budget = min(
+            budget,
+            max(
+                0,
+                base_prompt_max_tokens - base_prompt_len - max(0, reserve_tokens),
+            ),
+        )
+
+    if budget <= 0:
+        return text_base
+
+    ehr_ids = tokenizer(
+        ehr_text,
+        add_special_tokens=False,
+        truncation=True,
+        max_length=budget,
+    ).input_ids
+
+    def _build(ids: Sequence[int]) -> str:
+        ehr_trimmed = tokenizer.decode(ids, skip_special_tokens=True)
+        messages = [
+            {"role": "system", "content": sys},
+            {"role": "user", "content": user_prefix + ehr_trimmed},
+        ]
+        return tokenizer.apply_chat_template(
+            messages,
+            tokenize=False,
+            add_generation_prompt=True,
+            enable_thinking=enable_thinking,
+        )
+
+    rendered = _build(ehr_ids)
+    rendered_len = len(tokenizer(rendered, add_special_tokens=False).input_ids)
+    if rendered_len <= max_context_tokens:
+        return rendered
+
+    # Decode+template can still drift token length; trim additional tokens defensively.
+    overflow = rendered_len - max_context_tokens
+    if overflow >= len(ehr_ids):
+        return text_base
+
+    return _build(ehr_ids[:-overflow])
+# --- end ICL sampling ---
+
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+_ASSETS = _REPO_ROOT / "EHRSHOT_ASSETS"
+
+# %%
+def resolve_instruction_from_serializations(
+    tasks_serializations: Sequence[Any],
+    serialization_indices: Iterable[int],
+    sub_task: str,
+) -> str:
+    """Resolve one strict task instruction from serialization tuples."""
+    instructions: list[str] = []
+    for idx in serialization_indices:
+        entry = tasks_serializations[int(idx)]
+        if not isinstance(entry, (tuple, list)) or len(entry) < 2:
+            raise ValueError(
+                "Unexpected serialization entry format for "
+                f"sub_task='{sub_task}', idx={int(idx)}: {type(entry)}"
+            )
+        instruction = entry[0]
+        if not isinstance(instruction, str) or not instruction.strip():
+            raise ValueError(
+                "Missing non-empty instruction in serialization entry for "
+                f"sub_task='{sub_task}', idx={int(idx)}"
+            )
+        instructions.append(instruction.strip())
+
+    if not instructions:
+        raise ValueError(f"No serialization indices were provided for sub_task='{sub_task}'")
+
+    unique_instructions = sorted(set(instructions))
+    if len(unique_instructions) > 1:
+        raise ValueError(
+            "Conflicting instructions found in serializations for "
+            f"sub_task='{sub_task}': {unique_instructions[:3]}"
+        )
+
+    return unique_instructions[0]
+
+def parse_args():
+    """Parse command line arguments"""
+    parser = argparse.ArgumentParser(description="Run LLM decoder experiments for medical prediction tasks")
+    
+    # Paths
+    parser.add_argument("--output_dir", type=str, 
+                        default=str(_ASSETS / "experiments" / "llm_variants"),
+                        help="Output directory for results (filename will be auto-generated)")
+    parser.add_argument("--splits_path", type=str,
+                        default=str(_ASSETS / "benchmark" / "ehrshot_splits_to_serializations.csv"),
+                        help="Path to splits to serializations CSV file")
+    parser.add_argument("--serializations_path", type=str,
+                        default=str(_ASSETS / "benchmark" / "tasks_serializations.pkl"),
+                        help="Path to tasks serializations pickle file")
+    
+    # Task selection (for array jobs - specify single task, k, replicate)
+    parser.add_argument("--sub_task", type=str, default=None,
+                        help="Single task to run (for array jobs)")
+    parser.add_argument("--k", type=int, default=None,
+                        help="Single k value to run (for array jobs)")
+    parser.add_argument("--replicate", type=int, default=None,
+                        help="Single replicate to run (for array jobs)")
+    
+    # Task lists (for running multiple)
+    parser.add_argument("--tasks", type=str, nargs="*", default=None,
+                        help="List of tasks to run (overrides default list)")
+    parser.add_argument("--ks", type=int, nargs="*", default=[128],
+                        help="List of k values to run")
+    parser.add_argument("--replicates", type=int, nargs="*", default=[0],
+                        help="List of replicates to run")
+    
+    # Model parameters
+    parser.add_argument("--model_name", type=str, default="Qwen/Qwen3-0.6B",
+                        help="Model name (Qwen/Qwen3-0.6B, Qwen/Qwen3-4B, Qwen/Qwen3-8B)")
+    parser.add_argument("--max_input_length", type=int, default=4096,
+                        help="Maximum input length in tokens")
+    parser.add_argument("--batch_size", type=int, default=8,
+                        help="Batch size for training and inference")
+    parser.add_argument("--icl_shots", type=int, default=0, choices=[0, 2, 4, 6],
+                        help="In-context learning shot count (supported: 0, 2, 4, 6)")
+    parser.add_argument("--icl_seed", type=int, default=42,
+                        help="Random seed for deterministic ICL example selection")
+    parser.add_argument("--icl_source_split", type=str, default="train", choices=["train", "val"],
+                        help="Split to sample ICL examples from")
+    parser.add_argument("--icl_examples_max_tokens", type=int, default=None,
+                        help="Optional token cap for the rendered ICL examples block")
+    parser.add_argument("--base_prompt_max_tokens", type=int, default=None,
+                        help="Optional token cap for the base prompt excluding ICL examples")
+    parser.add_argument("--enable_yarn", action="store_true", default=False,
+                        help="Enable YaRN rope scaling for long-context runs")
+    parser.add_argument("--yarn_factor", type=float, default=4.0,
+                        help="YaRN rope scaling factor")
+    parser.add_argument("--yarn_original_max_position_embeddings", type=int, default=32768,
+                        help="Original max position embeddings used for YaRN scaling")
+    
+    # LoRA parameters
+    parser.add_argument("--lora_r", type=int, default=16,
+                        help="LoRA rank")
+    parser.add_argument("--lora_alpha", type=int, default=32,
+                        help="LoRA alpha")
+    parser.add_argument("--lora_dropout", type=float, default=0.05,
+                        help="LoRA dropout rate")
+    
+    # Training parameters
+    parser.add_argument("--lr", type=float, default=2e-4,
+                        help="Learning rate")
+    parser.add_argument("--warmup_ratio", type=float, default=0.03,
+                        help="Warmup ratio")
+    parser.add_argument("--num_train_epochs_cap", type=int, default=20,
+                        help="Maximum number of training epochs")
+    parser.add_argument("--effective_batch_size", type=int, default=None,
+                        help="Effective batch size (if None, uses min(k, 8))")
+    
+    # Other parameters
+    parser.add_argument("--num_threads", type=int, default=40,
+                        help="Number of threads for parallel processing")
+    parser.add_argument("--labeling_function", type=str, default="llm_decoder_ft",
+                        help="Name for the labeling function")
+    parser.add_argument("--show_progress", action="store_true", default=True,
+                        help="Show progress bars and detailed output")
+    parser.add_argument("--quiet", action="store_true", default=False,
+                        help="Suppress progress output")
+    parser.add_argument("--overwrite", action="store_true", default=False,
+                        help="Overwrite existing output files instead of skipping")
+    parser.add_argument("--eval_train_val", action="store_true", default=False,
+                        help="Also calculate and log scores for train and validation sets during evaluation")
+    parser.add_argument("--val_limit", type=int, default=-1,
+                        help="Maximum number of validation examples to use; -1 keeps the full set")
+    parser.add_argument("--test_limit", type=int, default=-1,
+                        help="Maximum number of test examples to use; -1 keeps the full set")
+    parser.add_argument("--subset_seed", type=int, default=42,
+                        help="Random seed used when subsetting validation/test splits")
+
+    return parser.parse_args()
+
+# %%
+def _maybe_limit_split(
+    split_df: pd.DataFrame,
+    limit: int,
+    rng: np.random.Generator,
+    split_name: str,
+    seed: int,
+) -> pd.DataFrame:
+    """Optionally down-sample a split to the requested limit with reproducibility."""
+    if limit is None or limit < 0:
+        return split_df
+
+    available = len(split_df)
+    if available == 0:
+        return split_df
+
+    if limit == 0:
+        logger.info(f"{split_name.title()} limit set to 0; returning empty split")
+        return split_df.iloc[0:0].copy()
+
+    if limit >= available:
+        logger.info(f"{split_name.title()} limit {limit} >= available {available}; using full split")
+        return split_df
+
+    indices = rng.choice(available, size=limit, replace=False)
+    limited_df = split_df.iloc[np.sort(indices)].copy()
+    logger.info(
+        f"Applying {split_name} limit: selected {limit} of {available} rows (seed={seed})"
+    )
+    return limited_df
+
+# %%
+# Default task list
+DEFAULT_TASKS = [
+    "guo_los",
+    "guo_readmission",
+    "guo_icu",
+    "lab_thrombocytopenia",
+    "lab_hyperkalemia",
+    "lab_hypoglycemia",
+    "lab_hyponatremia",
+    "lab_anemia",
+    "new_hypertension",
+    "new_hyperlipidemia",
+    "new_pancan",
+    "new_celiac",
+    "new_lupus",
+    "new_acutemi",
+    "chexpert_Lung Lesion",
+    "chexpert_Pneumothorax",
+    "chexpert_Fracture",
+    "chexpert_Consolidation",
+    "chexpert_Cardiomegaly",
+    "chexpert_Enlarged Cardiomediastinum",
+    "chexpert_Edema",
+    "chexpert_Pneumonia",
+    "chexpert_Pleural Other",
+    "chexpert_Lung Opacity",
+    "chexpert_Atelectasis",
+    "chexpert_Pleural Effusion",
+    "chexpert_No Finding",
+    "chexpert_Support Devices",
+]
+
+def main():
+    """Main experiment function"""
+    args = parse_args()
+    
+    # Validate required arguments
+    if args.sub_task is None or args.k is None or args.replicate is None:
+        print("Error: --sub_task, --k, and --replicate are required arguments")
+        print("Example: python 10b_fit_and_eval_decoder.py --sub_task guo_los --k 128 --replicate 0 --model_name Qwen/Qwen3-0.6B")
+        sys.exit(1)
+
+    # Configure progress display
+    show_progress = args.show_progress and not args.quiet
+    
+    print(f"Running single experiment: task={args.sub_task}, k={args.k}, replicate={args.replicate}, model={args.model_name}")
+
+    # Generate output filename
+    model_safe = re.sub(r'[^\w\-_\.]', '_', args.model_name.replace('/', '_'))
+    icl_suffix = f"_icl{args.icl_shots}" if args.icl_shots > 0 else ""
+    output_filename = f"results_{model_safe}_{args.sub_task}_k{args.k}_r{args.replicate}{icl_suffix}.csv"
+    output_path = os.path.join(args.output_dir, output_filename)
+    
+    # Check if output file already exists
+    if os.path.exists(output_path) and not args.overwrite:
+        print(f"Output file already exists: {output_path}")
+        print("Skipping experiment to avoid overwriting results.")
+        print("Use --overwrite flag to overwrite existing results.")
+        sys.exit(0)
+    elif os.path.exists(output_path) and args.overwrite:
+        print(f"Output file already exists: {output_path}")
+        print("Overwriting existing results due to --overwrite flag.")
+    
+    # Create output directory if it doesn't exist
+    os.makedirs(args.output_dir, exist_ok=True)
+
+    # Load data
+    print("Loading data...")
+    splits_to_serializations, tasks_serializations = load_data(args)
+    
+    # Enable optimizations
+    logger.info("Enabling PyTorch optimizations...")
+    torch.backends.cuda.matmul.allow_tf32 = True
+    torch.set_float32_matmul_precision("high")
+
+    # Run single experiment
+    logger.info("Starting single experiment...")
+    results = run_single_experiment(args, splits_to_serializations, tasks_serializations, show_progress)
+    
+    # Save results
+    print(f"Saving results to: {output_path}")
+    df = pd.DataFrame(results)
+    df.to_csv(output_path, index=False)
+    print("Done!")
+
+# %%
+def load_data(args):
+    """Load data splits and serializations"""
+    logger.info(f"Loading splits data from: {args.splits_path}")
+    dtype_dict = {
+        "task": str,
+        "split_name": str,
+        "shot_size": int,
+        "fold": int,
+        "patient_id": int,
+        "prediction_time": str,
+        "label_type": str,
+        "label_value": str,
+        "serialization_idx": int,
+    }
+
+    splits_to_serializations = pd.read_csv(args.splits_path, dtype=dtype_dict, parse_dates=["prediction_time"])
+    splits_to_serializations["label_value"] = splits_to_serializations["label_value"].apply(
+        lambda x: x == "True"
+    )
+    logger.info(f"Loaded {len(splits_to_serializations)} split records")
+
+    logger.info(f"Loading serializations data from: {args.serializations_path}")
+    with open(args.serializations_path, "rb") as f:
+        tasks_serializations = pickle.load(f)
+    logger.info(f"Loaded {len(tasks_serializations)} serialized samples")
+
+    return splits_to_serializations, tasks_serializations
+
+# %%
+class llm_classifier(Protocol):
+    """Interface for all LLM variant classifiers"""
+    def run_evaluation(
+        self,
+        sub_task: str,
+        X_train_texts: list[str],
+        X_val_texts: list[str],
+        X_test_texts: list[str],
+        y_train: np.ndarray,
+        y_val: np.ndarray,
+        y_test: np.ndarray,
+        n_jobs: int = 1,
+        test_patient_ids: np.ndarray | None = None,
+        **kwargs,
+    ) -> Tuple[object, dict]: ...
+
+# %%
+def _find_subsequence(haystack: List[int], needle: List[int]) -> Optional[int]:
+    """Find the starting index of needle subsequence in haystack"""
+    if not needle or len(needle) > len(haystack):
+        return None
+    first = needle[0]
+    for i, tok in enumerate(haystack):
+        if tok == first and haystack[i : i + len(needle)] == needle:
+            return i
+    return None
+
+
+def _parse_semver_tuple(version_text: str) -> tuple[int, int, int]:
+    parts = [int(x) for x in re.findall(r"\d+", version_text)]
+    if len(parts) < 3:
+        parts.extend([0] * (3 - len(parts)))
+    return (parts[0], parts[1], parts[2])
+
+class LLMDecoderQwen3:
+    """Qwen3 decoder for Yes/No classification using next-token probabilities"""
+    
+    def __init__(
+        self,
+        model_name: str = "Qwen/Qwen3-0.6B",
+        device_map: str = "auto",
+        torch_dtype: str = "auto",
+        max_context_tokens: int = 4096,
+        cache_dir: Optional[str] = None,
+        answer_after_think: bool = True,
+        show_progress: bool = True,
+        enable_yarn: bool = False,
+        yarn_factor: float = 4.0,
+        yarn_original_max_position_embeddings: int = 32768,
+        icl_examples_max_tokens: int | None = None,
+        base_prompt_max_tokens: int | None = None,
+    ):
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            model_name, cache_dir=cache_dir, use_fast=True
+        )
+        if self.tokenizer.pad_token_id is None:
+            self.tokenizer.pad_token = self.tokenizer.eos_token
+
+        model_kwargs = {
+            "torch_dtype": torch_dtype,
+            "device_map": device_map,
+            "cache_dir": cache_dir,
+        }
+        if max_context_tokens >= 32768:
+            model_kwargs["attn_implementation"] = "flash_attention_2"
+        if enable_yarn and max_context_tokens > yarn_original_max_position_embeddings:
+            if _parse_semver_tuple(transformers.__version__) < (4, 51, 0):
+                raise RuntimeError(
+                    f"YaRN requires transformers>=4.51.0, found {transformers.__version__}"
+                )
+            model_kwargs["rope_scaling"] = {
+                "rope_type": "yarn",
+                "factor": float(yarn_factor),
+                "original_max_position_embeddings": int(yarn_original_max_position_embeddings),
+            }
+            logger.info(f"Enabling YaRN rope scaling: {model_kwargs['rope_scaling']}")
+        elif enable_yarn:
+            logger.info(
+                "Ignoring --enable_yarn because max_input_length is not above "
+                f"{yarn_original_max_position_embeddings}"
+            )
+
+        self.model = AutoModelForCausalLM.from_pretrained(model_name, **model_kwargs)
+        self.model.eval()
+
+        self.max_context_tokens = max_context_tokens
+        self.answer_after_think = answer_after_think
+        self.show_progress = show_progress
+        self.icl_examples_max_tokens = icl_examples_max_tokens
+        self.base_prompt_max_tokens = base_prompt_max_tokens
+        self._literal_yes = "Yes"
+        self._literal_no = "No"
+        self.enable_thinking = False
+        self._assistant_prefill = "Answer: "
+
+        # Build mapping from surface forms to token IDs
+        self._build_token_mappings()
+
+    def _build_token_mappings(self):
+        """Build single-token surface form to ID mappings for Yes/No variants"""
+        self._surface_to_ids: Dict[str, List[int]] = {}
+        special = set(self.tokenizer.all_special_ids or [])
+        vocab_size = getattr(self.tokenizer, "vocab_size", None)
+        if vocab_size is None:
+            vocab_size = max(self.tokenizer.get_vocab().values()) + 1
+
+        for tid in range(vocab_size):
+            if tid in special:
+                continue
+            try:
+                s = self.tokenizer.decode([tid], skip_special_tokens=True)
+            except Exception:
+                continue
+            if s is not None:
+                self._surface_to_ids.setdefault(s, []).append(tid)
+
+        def _variants(base: str) -> List[str]:
+            cases = {base, base.upper(), base.lower(), base.capitalize()}
+            punct = {"", ".", "!", "?"}
+            lead = {"", " "}
+            out = set()
+            for c in cases:
+                for p in punct:
+                    for l in lead:
+                        out.add(f"{l}{c}{p}")
+            return sorted(out, key=len)
+
+        self._yes_surfaces = _variants("Yes")
+        self._no_surfaces = _variants("No")
+
+        def _collect_ids(surfaces: List[str]) -> List[int]:
+            ids = []
+            for s in surfaces:
+                for tid in self._surface_to_ids.get(s, []):
+                    ids.append(tid)
+            seen = set()
+            uniq = []
+            for tid in ids:
+                if tid not in seen:
+                    seen.add(tid)
+                    uniq.append(tid)
+            return uniq
+
+        self._yes_token_ids_static: List[int] = _collect_ids(self._yes_surfaces)
+        self._no_token_ids_static: List[int] = _collect_ids(self._no_surfaces)
+
+        if self.show_progress:
+            print(
+                f"[Decoder] Found {len(self._yes_token_ids_static)} single-token YES variants "
+                f"and {len(self._no_token_ids_static)} single-token NO variants."
+            )
+            dbg_yes = [(tid, self.tokenizer.decode([tid])) for tid in self._yes_token_ids_static]
+            dbg_no = [(tid, self.tokenizer.decode([tid])) for tid in self._no_token_ids_static]
+            print("YES token ids:", dbg_yes[:6], " ...")
+            print("NO token ids:", dbg_no[:6], " ...")
+
+    def _build_messages(self, ehr_text: str, question: str) -> List[Dict[str, str]]:
+        sys = f"Question: {question}\n\nAnswer STRICTLY with a single token: Yes or No. No punctuation, no extra words."
+        user = f"{ehr_text}"
+        return [{"role": "system", "content": sys}, {"role": "user", "content": user}]
+
+    def _apply_template(self, messages: List[Dict[str, str]], enable_thinking: bool) -> str:
+        return self.tokenizer.apply_chat_template(
+            messages,
+            tokenize=False,
+            add_generation_prompt=True,
+            enable_thinking=enable_thinking,
+        )
+
+    def _render_with_budget(
+        self,
+        ehr_text: str,
+        task_instruction: str,
+        enable_thinking: bool,
+        icl_examples: Optional[List[ICLExample]] = None,
+        reserve_tokens: int = 0,
+    ) -> str:
+        """Render prompt with proper truncation to fit within max_context_tokens"""
+        return render_prompt_with_icl_budget(
+            tokenizer=self.tokenizer,
+            task_instruction=task_instruction,
+            ehr_text=ehr_text,
+            icl_examples=icl_examples or [],
+            max_context_tokens=self.max_context_tokens,
+            enable_thinking=enable_thinking,
+            reserve_tokens=reserve_tokens,
+            icl_examples_max_tokens=self.icl_examples_max_tokens,
+            base_prompt_max_tokens=self.base_prompt_max_tokens,
+        )
+
+    def _first_candidate_token_id(self, prompt_text: str, candidate: str) -> int:
+        """Fallback method to find token ID for a candidate word"""
+        ctx_ids = self.tokenizer(prompt_text, add_special_tokens=False).input_ids
+        cand_ids = self.tokenizer(prompt_text + candidate, add_special_tokens=False).input_ids
+        if len(cand_ids) <= len(ctx_ids):
+            cand_ids = self.tokenizer(
+                prompt_text + " " + candidate, add_special_tokens=False
+            ).input_ids
+        if len(cand_ids) <= len(ctx_ids):
+            candidate_only_ids = self.tokenizer(candidate, add_special_tokens=False).input_ids
+            if len(candidate_only_ids) > 0:
+                return candidate_only_ids[0]
+            candidate_with_space = self.tokenizer(
+                " " + candidate, add_special_tokens=False
+            ).input_ids
+            if len(candidate_with_space) > 0:
+                return candidate_with_space[-1]
+            raise RuntimeError(f"Could not tokenize candidate '{candidate}'")
+        return cand_ids[len(ctx_ids)]
+
+    @torch.no_grad()
+    def _last_step_probs_from_texts(self, texts: List[str]) -> torch.Tensor:
+        """Get probability distribution over vocabulary for the last token position"""
+        device = self.model.device
+
+        enc = self.tokenizer(
+            texts, return_tensors="pt", padding=True, truncation=False, add_special_tokens=False
+        )
+        input_ids = enc.input_ids.to(device)
+        attention_mask = enc.attention_mask.to(device)
+        outputs = self.model(input_ids=input_ids, attention_mask=attention_mask)
+        logits = outputs.logits
+        last_indices = attention_mask.sum(dim=1) - 1
+        last_logits = logits[torch.arange(logits.size(0), device=device), last_indices]
+        probs = torch.softmax(last_logits, dim=-1)
+        return probs
+
+    @torch.no_grad()
+    def predict_proba(
+        self,
+        ehr_texts: List[str],
+        question: str,
+        batch_size: int = 4,
+        icl_examples: Optional[List[ICLExample]] = None,
+    ) -> Dict[str, torch.Tensor]:
+        """Compute Yes/No probabilities for a batch of EHR texts"""
+        device = self.model.device
+        all_p_yes, all_p_no = [], []
+
+        if len(ehr_texts) == 0:
+            empty = torch.empty(0, dtype=torch.float32, device=device)
+            return {
+                "p_yes": empty,
+                "p_no": empty,
+                "p_yes_2way": empty,
+                "p_no_2way": empty,
+            }
+
+        if batch_size <= 0:
+            batch_size = 1
+
+        it = range(0, len(ehr_texts), batch_size)
+        if self.show_progress:
+            it = tqdm.trange(0, len(ehr_texts), batch_size)
+
+        for i in it:
+            batch_ehrs = ehr_texts[i : i + batch_size]
+            prompts_no_think = []
+            prompts_think = []
+            assistant_prefill_tokens = len(
+                self.tokenizer(self._assistant_prefill, add_special_tokens=False).input_ids
+            )
+            
+            for ehr in batch_ehrs:
+                prompts_think.append(
+                    self._render_with_budget(
+                        ehr,
+                        question,
+                        enable_thinking=self.enable_thinking,
+                        icl_examples=icl_examples,
+                        reserve_tokens=assistant_prefill_tokens if self.answer_after_think else 0,
+                    )
+                )
+                prompts_no_think.append(
+                    self._render_with_budget(
+                        ehr,
+                        question,
+                        enable_thinking=False,
+                        icl_examples=icl_examples,
+                        reserve_tokens=0,
+                    )
+                )
+
+            if self.answer_after_think:
+                contexts_for_scoring = [ptxt + self._assistant_prefill for ptxt in prompts_think]
+            else:
+                contexts_for_scoring = prompts_no_think
+
+            probs = self._last_step_probs_from_texts(contexts_for_scoring)
+
+            yes_ids_list = self._yes_token_ids_static
+            no_ids_list = self._no_token_ids_static
+
+            if not yes_ids_list:
+                yes_ids_list = [
+                    self._first_candidate_token_id(contexts_for_scoring[0], self._literal_yes)
+                ]
+            if not no_ids_list:
+                no_ids_list = [
+                    self._first_candidate_token_id(contexts_for_scoring[0], self._literal_no)
+                ]
+
+            y_idx = torch.tensor(yes_ids_list, device=probs.device, dtype=torch.long)
+            n_idx = torch.tensor(no_ids_list, device=probs.device, dtype=torch.long)
+
+            p_yes = probs.index_select(dim=1, index=y_idx).sum(dim=1)
+            p_no = probs.index_select(dim=1, index=n_idx).sum(dim=1)
+
+            all_p_yes.append(p_yes)
+            all_p_no.append(p_no)
+
+        p_yes = torch.cat(all_p_yes, dim=0).cpu()
+        p_no = torch.cat(all_p_no, dim=0).cpu()
+        denom = (p_yes + p_no).clamp_min(1e-12)
+        p_yes_2way = p_yes / denom
+        p_no_2way = p_no / denom
+
+        return {
+            "p_yes": p_yes,
+            "p_no": p_no,
+            "p_yes_2way": p_yes_2way,
+            "p_no_2way": p_no_2way,
+        }
+
+    @torch.no_grad()
+    def score(
+        self,
+        ehr_texts: List[str],
+        question: str,
+        batch_size: int = 4,
+        icl_examples: Optional[List[ICLExample]] = None,
+    ) -> torch.Tensor:
+        out = self.predict_proba(
+            ehr_texts,
+            question,
+            batch_size=batch_size,
+            icl_examples=icl_examples,
+        )
+        return out["p_yes_2way"]
+
+# %%
+class llm_decoder:
+    """LLM decoder classifier without fine-tuning"""
+
+    def __init__(
+        self,
+        model_name: str = "Qwen/Qwen3-0.6B",
+        max_input_length: int = 4096,
+        batch_size: int = 4,
+        cache_dir: str | None = None,
+        answer_after_think: bool = True,
+        show_progress: bool = True,
+        icl_shots: int = 0,
+        icl_seed: int = 42,
+        icl_source_split: str = "train",
+        enable_yarn: bool = False,
+        yarn_factor: float = 4.0,
+        yarn_original_max_position_embeddings: int = 32768,
+        icl_examples_max_tokens: int | None = None,
+        base_prompt_max_tokens: int | None = None,
+    ):
+        self.model_name = model_name
+        self.max_input_length = max_input_length
+        self.batch_size = batch_size
+        self.cache_dir = cache_dir
+        self.icl_shots = validate_icl_shots(icl_shots)
+        self.icl_seed = icl_seed
+        self.icl_source_split = icl_source_split
+
+        self._decoder = LLMDecoderQwen3(
+            model_name=model_name,
+            device_map="auto",
+            torch_dtype="auto",
+            max_context_tokens=max_input_length,
+            cache_dir=cache_dir,
+            answer_after_think=answer_after_think,
+            show_progress=show_progress,
+            enable_yarn=enable_yarn,
+            yarn_factor=yarn_factor,
+            yarn_original_max_position_embeddings=yarn_original_max_position_embeddings,
+            icl_examples_max_tokens=icl_examples_max_tokens,
+            base_prompt_max_tokens=base_prompt_max_tokens,
+        )
+
+    def _build_icl_examples(
+        self,
+        source_texts: List[str],
+        source_labels: np.ndarray,
+        forbidden_indices: Optional[Set[int]] = None,
+    ) -> List[ICLExample]:
+        selected_indices = select_icl_example_indices(
+            labels=source_labels.tolist(),
+            shot_count=self.icl_shots,
+            seed=self.icl_seed,
+            forbidden_indices=forbidden_indices,
+        )
+        return [
+            ICLExample(index=i, label=int(source_labels[i]), text=source_texts[i])
+            for i in selected_indices
+        ]
+
+    def _score_with_optional_self_exclusion(
+        self,
+        eval_texts: List[str],
+        eval_serialization_ids: Optional[np.ndarray],
+        source_texts: List[str],
+        source_labels: np.ndarray,
+        source_serialization_idx_to_pos: Dict[int, int],
+        question: str,
+        split_name: str,
+    ) -> np.ndarray:
+        if self.icl_shots == 0:
+            return (
+                self._decoder.score(
+                    eval_texts,
+                    question=question,
+                    batch_size=self.batch_size,
+                    icl_examples=[],
+                )
+                .cpu()
+                .float()
+                .numpy()
+            )
+
+        needs_self_exclusion = (
+            split_name == self.icl_source_split and len(source_serialization_idx_to_pos) > 0
+        )
+        if not needs_self_exclusion:
+            icl_examples = self._build_icl_examples(source_texts, source_labels)
+            return (
+                self._decoder.score(
+                    eval_texts,
+                    question=question,
+                    batch_size=self.batch_size,
+                    icl_examples=icl_examples,
+                )
+                .cpu()
+                .float()
+                .numpy()
+            )
+
+        if eval_serialization_ids is None or len(eval_serialization_ids) != len(eval_texts):
+            raise ValueError(
+                "ICL self-exclusion requires per-row serialization_idx values for the eval split."
+            )
+
+        probs = []
+        for i, text in enumerate(eval_texts):
+            eval_sid = int(eval_serialization_ids[i])
+            source_pos = source_serialization_idx_to_pos.get(eval_sid)
+            forbidden = {source_pos} if source_pos is not None else set()
+            icl_examples = self._build_icl_examples(
+                source_texts, source_labels, forbidden_indices=forbidden
+            )
+            p_yes = self._decoder.score(
+                [text],
+                question=question,
+                batch_size=1,
+                icl_examples=icl_examples,
+            )
+            probs.append(float(p_yes.cpu().float().numpy()[0]))
+        return np.asarray(probs, dtype=float)
+
+    def run_evaluation(
+        self,
+        sub_task: str,
+        X_train_texts: list[str],
+        X_val_texts: list[str],
+        X_test_texts: list[str],
+        y_train: np.ndarray,
+        y_val: np.ndarray,
+        y_test: np.ndarray,
+        n_jobs: int = 1,
+        test_patient_ids: np.ndarray | None = None,
+        eval_train_val: bool = False,
+        **kwargs,
+    ) -> Tuple[object, dict]:
+        question = kwargs.get("question_override")
+        if not question:
+            raise ValueError(
+                "question_override is required: instructions must come from the "
+                "serializations pickle (entry[0]), never from a generated default"
+            )
+
+        logger.critical(f"Start | Evaluating llm_decoder with {self.model_name} on '{sub_task}'")
+        logger.info(
+            f"Train N={len(X_train_texts)}  Val N={len(X_val_texts)}  Test N={len(X_test_texts)}"
+        )
+        def _safe_mean(arr: np.ndarray) -> float:
+            return float(np.mean(arr)) if arr.size > 0 else float("nan")
+
+        train_prev = _safe_mean(y_train)
+        val_prev = _safe_mean(y_val)
+        test_prev = _safe_mean(y_test)
+
+        logger.info(
+            f"Prevalence: train={train_prev:.4f} val={val_prev:.4f} test={test_prev:.4f}"
+        )
+
+        icl_source_texts = kwargs.get("icl_source_texts")
+        icl_source_labels = kwargs.get("icl_source_labels")
+        train_serialization_ids = kwargs.get("train_serialization_ids")
+        val_serialization_ids = kwargs.get("val_serialization_ids")
+        test_serialization_ids = kwargs.get("test_serialization_ids")
+        icl_source_serialization_ids = kwargs.get("icl_source_serialization_ids")
+        if icl_source_texts is not None and icl_source_labels is not None:
+            source_texts = list(icl_source_texts)
+            source_labels = np.asarray(icl_source_labels)
+        else:
+            split_map = {
+                "train": (X_train_texts, y_train),
+                "val": (X_val_texts, y_val),
+            }
+            source_texts, source_labels = split_map.get(
+                self.icl_source_split, (X_train_texts, y_train)
+            )
+        source_sid_to_pos: Dict[int, int] = {}
+        if icl_source_serialization_ids is not None:
+            for pos, sid in enumerate(np.asarray(icl_source_serialization_ids)):
+                source_sid_to_pos[int(sid)] = pos
+        if self.icl_shots > 0:
+            icl_examples = self._build_icl_examples(source_texts, source_labels)
+            pos = sum(ex.label == 1 for ex in icl_examples)
+            neg = len(icl_examples) - pos
+            logger.info(
+                f"Using {len(icl_examples)} ICL examples from {self.icl_source_split} "
+                f"(pos={pos}, neg={neg}, seed={self.icl_seed})"
+            )
+
+        # Always calculate test probabilities
+        logger.info("Computing test set probabilities...")
+        y_test_proba = self._score_with_optional_self_exclusion(
+            eval_texts=X_test_texts,
+            eval_serialization_ids=test_serialization_ids,
+            source_texts=source_texts,
+            source_labels=source_labels,
+            source_serialization_idx_to_pos=source_sid_to_pos,
+            question=question,
+            split_name="test",
+        )
+
+        # Only calculate train/val probabilities if requested
+        y_train_proba = None
+        y_val_proba = None
+        train_metrics_available = False
+        val_metrics_available = False
+
+        if eval_train_val:
+            if len(X_train_texts) > 0 and y_train.size > 0:
+                logger.info("Computing train set probabilities...")
+                y_train_proba = self._score_with_optional_self_exclusion(
+                    eval_texts=X_train_texts,
+                    eval_serialization_ids=train_serialization_ids,
+                    source_texts=source_texts,
+                    source_labels=source_labels,
+                    source_serialization_idx_to_pos=source_sid_to_pos,
+                    question=question,
+                    split_name="train",
+                )
+                train_metrics_available = True
+            else:
+                logger.info("Skipping train set probabilities; no training samples provided")
+
+            if len(X_val_texts) > 0 and y_val.size > 0:
+                logger.info("Computing validation set probabilities...")
+                y_val_proba = self._score_with_optional_self_exclusion(
+                    eval_texts=X_val_texts,
+                    eval_serialization_ids=val_serialization_ids,
+                    source_texts=source_texts,
+                    source_labels=source_labels,
+                    source_serialization_idx_to_pos=source_sid_to_pos,
+                    question=question,
+                    split_name="val",
+                )
+                val_metrics_available = True
+            else:
+                logger.info("Skipping validation set probabilities; no validation samples provided")
+
+        y_test_pred = (y_test_proba >= 0.5).astype(int)
+
+        metric_dict = {
+            "auroc": metrics.roc_auc_score,
+            "brier": metrics.brier_score_loss,
+            "auprc": metrics.average_precision_score,
+        }
+
+        scores = {}
+        for metric, func in metric_dict.items():
+            scores[metric] = {}
+            test_score = func(y_test, y_test_proba)
+            train_score = None
+            val_score = None
+
+            log_parts = [f"test={test_score:.4f}"]
+
+            if eval_train_val and train_metrics_available and y_train_proba is not None:
+                train_score = func(y_train, y_train_proba)
+                log_parts.insert(0, f"train={train_score:.4f}")
+
+            if eval_train_val and val_metrics_available and y_val_proba is not None:
+                val_score = func(y_val, y_val_proba)
+                insert_idx = 1 if train_metrics_available else 0
+                log_parts.insert(insert_idx, f"val={val_score:.4f}")
+
+            logger.info(f"{metric.upper()} | {' '.join(log_parts)}")
+
+            if test_patient_ids is None:
+                test_patient_ids = np.arange(len(y_test))
+            unique_ids = sorted(set(test_patient_ids))
+
+            boots = []
+            for i in range(1000):
+                sample = sklearn.utils.resample(unique_ids, random_state=i)
+                counts = collections.Counter(sample)
+                weights = np.array([counts.get(pid, 0) for pid in test_patient_ids], dtype=float)
+                if weights.sum() == 0:
+                    continue
+                boots.append(func(y_test, y_test_proba, sample_weight=weights))
+
+            lower, upper = np.percentile(boots, [2.5, 97.5])
+            scores[metric].update(
+                score=float(test_score),
+                std=float(np.std(boots, ddof=1)),
+                lower=float(lower),
+                mean=float(np.mean(boots)),
+                upper=float(upper),
+            )
+            if train_score is not None:
+                scores[metric]["train_score"] = float(train_score)
+            if val_score is not None:
+                scores[metric]["val_score"] = float(val_score)
+
+        model_like = {
+            "head": (
+                "decoder_yesno_after_think" if self._decoder.answer_after_think else "decoder_yesno"
+            ),
+            "backbone": self.model_name,
+            "sub_task": sub_task,
+            "batch_size": self.batch_size,
+            "max_input_length": self.max_input_length,
+            "icl_shots": self.icl_shots,
+            "icl_seed": self.icl_seed,
+            "icl_source_split": self.icl_source_split,
+        }
+        return model_like, scores
+
+# %%
+class _NextTokenYesNoDataset(Dataset):
+    """Dataset for single-token next-token prediction training"""
+    
+    def __init__(
+        self,
+        decoder: LLMDecoderQwen3,
+        ehr_texts: list[str],
+        labels: np.ndarray,
+        question: str,
+        reserve_extra_tokens: int = 8,
+        answer_after_think: bool | None = None,
+    ):
+        self.decoder = decoder
+        self.tokenizer = decoder.tokenizer
+        self.model = decoder.model
+        self.ehrs = ehr_texts
+        self.labels = labels.astype(int).tolist()
+        self.question = question
+        self.reserve = max(2, reserve_extra_tokens)
+        self.answer_after_think = (
+            decoder.answer_after_think if answer_after_think is None else answer_after_think
+        )
+
+        self.yes_ids = decoder._yes_token_ids_static or [
+            decoder._first_candidate_token_id("X", decoder._literal_yes)
+        ]
+        self.no_ids = decoder._no_token_ids_static or [
+            decoder._first_candidate_token_id("X", decoder._literal_no)
+        ]
+
+        self.ctx_max = max(16, decoder.max_context_tokens - self.reserve)
+
+        # Pre-compute prompts to avoid redundant processing
+        self._contexts = []
+        for ehr in self.ehrs:
+            txt = self.decoder._render_with_budget(
+                ehr_text=ehr,
+                task_instruction=self.question,
+                enable_thinking=self.decoder.enable_thinking if self.answer_after_think else False,
+            )
+            ctx = txt + self.decoder._assistant_prefill
+            self._contexts.append(ctx)
+
+    def __len__(self):
+        return len(self.ehrs)
+
+    def __getitem__(self, i: int):
+        ctx = self._contexts[i]
+        y = self.labels[i]
+        # Use literal token IDs instead of random choice from variants
+        if y == 1:
+            tgt_id = self.decoder._first_candidate_token_id(ctx, self.decoder._literal_yes)
+        else:
+            tgt_id = self.decoder._first_candidate_token_id(ctx, self.decoder._literal_no)
+
+        ctx_ids = self.tokenizer(
+            ctx,
+            add_special_tokens=False,
+            truncation=True,
+            max_length=self.decoder.max_context_tokens - 1,
+        ).input_ids
+
+        input_ids = ctx_ids + [tgt_id]
+        attn = [1] * len(input_ids)
+        
+        # Only compute loss on the final token
+        labels = [-100] * len(input_ids)
+        labels[-1] = tgt_id
+
+        return {
+            "input_ids": torch.tensor(input_ids, dtype=torch.long),
+            "attention_mask": torch.tensor(attn, dtype=torch.long),
+            "labels": torch.tensor(labels, dtype=torch.long),
+        }
+
+@dataclass
+class _PadCollator:
+    """Data collator with padding support"""
+    pad_token_id: int
+    label_pad_id: int = -100
+    max_len: int | None = None
+
+    def __call__(self, batch):
+        if self.max_len is not None:
+            for x in batch:
+                for k in ("input_ids", "attention_mask", "labels"):
+                    seq = x[k].tolist()
+                    if len(seq) > self.max_len:
+                        seq = seq[-self.max_len :]
+                    x[k] = torch.tensor(seq, dtype=torch.long)
+        maxlen = max(len(x["input_ids"]) for x in batch)
+
+        def pad(seq, val, L):
+            return seq + [val] * (L - len(seq))
+
+        input_ids = torch.tensor(
+            [pad(x["input_ids"].tolist(), self.pad_token_id, maxlen) for x in batch],
+            dtype=torch.long,
+        )
+        attn = torch.tensor(
+            [pad(x["attention_mask"].tolist(), 0, maxlen) for x in batch], dtype=torch.long
+        )
+        labels = torch.tensor(
+            [pad(x["labels"].tolist(), self.label_pad_id, maxlen) for x in batch], dtype=torch.long
+        )
+        return {"input_ids": input_ids, "attention_mask": attn, "labels": labels}
+
+# %%
+class llm_decoder_ft(llm_decoder):
+    """LLM decoder with LoRA fine-tuning"""
+    
+    def __init__(
+        self,
+        model_name: str = "Qwen/Qwen3-0.6B",
+        max_input_length: int = 4096,
+        batch_size: int = 4,
+        cache_dir: str | None = None,
+        answer_after_think: bool = True,
+        show_progress: bool = True,
+        icl_shots: int = 0,
+        icl_seed: int = 42,
+        icl_source_split: str = "train",
+        enable_yarn: bool = False,
+        yarn_factor: float = 4.0,
+        yarn_original_max_position_embeddings: int = 32768,
+        icl_examples_max_tokens: int | None = None,
+        base_prompt_max_tokens: int | None = None,
+        lora_r: int = 16,
+        lora_alpha: int = 32,
+        lora_dropout: float = 0.05,
+        lr: float = 2e-4,
+        weight_decay: float = 0.0,
+        warmup_ratio: float = 0.03,
+        num_train_epochs_cap: int = 20,
+        effective_batch_size: int = 8,
+        fp16: bool | None = None,
+        bf16: bool | None = None,
+        seed: int = 42,
+        output_dir: str = None,
+        early_stopping_threshold: float = 0.0,
+        early_stopping_patience: int = 5,
+    ):
+        super().__init__(
+            model_name=model_name,
+            max_input_length=max_input_length,
+            batch_size=batch_size,
+            cache_dir=cache_dir,
+            answer_after_think=answer_after_think,
+            show_progress=show_progress,
+            icl_shots=icl_shots,
+            icl_seed=icl_seed,
+            icl_source_split=icl_source_split,
+            enable_yarn=enable_yarn,
+            yarn_factor=yarn_factor,
+            yarn_original_max_position_embeddings=yarn_original_max_position_embeddings,
+            icl_examples_max_tokens=icl_examples_max_tokens,
+            base_prompt_max_tokens=base_prompt_max_tokens,
+        )
+
+        self.show_progress = show_progress
+
+        # Configure and apply LoRA adapter
+        self._decoder.model.train()
+        self._lora_cfg = LoraConfig(
+            r=lora_r,
+            lora_alpha=lora_alpha,
+            lora_dropout=lora_dropout,
+            bias="none",
+            task_type=TaskType.CAUSAL_LM,
+            target_modules=[
+                "q_proj",
+                "k_proj",
+                "v_proj",
+                "o_proj",
+                "up_proj",
+                "down_proj",
+                "gate_proj",
+            ],
+        )
+        self._decoder.model = get_peft_model(self._decoder.model, self._lora_cfg)
+        if self.show_progress:
+            self._decoder.model.print_trainable_parameters()
+
+        # Set output directory first (needed for training args)
+        self.output_dir = output_dir if output_dir is not None else "./_llm_decoder_ft"
+        
+        # Auto-select mixed precision based on hardware
+        if bf16 is None:
+            bf16 = torch.cuda.is_available() and torch.cuda.is_bf16_supported()
+        if fp16 is None:
+            fp16 = torch.cuda.is_available() and not bf16
+
+        # Calculate gradient accumulation steps
+        gradient_accumulation_steps = max(1, effective_batch_size // batch_size)
+
+        self._train_args_tpl = dict(
+            per_device_train_batch_size=batch_size,
+            per_device_eval_batch_size=batch_size,
+            gradient_accumulation_steps=gradient_accumulation_steps,
+            learning_rate=lr,
+            weight_decay=weight_decay,
+            warmup_ratio=warmup_ratio,
+            lr_scheduler_type="cosine",
+            num_train_epochs=num_train_epochs_cap,
+            logging_strategy="steps",
+            logging_steps=1,
+            eval_strategy="epoch",
+            optim="adamw_torch",
+            save_strategy="epoch",
+            remove_unused_columns=False,
+            label_names=["labels"],
+            load_best_model_at_end=True,
+            metric_for_best_model="eval_loss",
+            greater_is_better=False,
+            save_total_limit=1,
+            fp16=fp16,
+            bf16=bf16,
+            dataloader_pin_memory=True,
+            report_to=[],
+            seed=seed,
+            output_dir=self.output_dir,
+            gradient_checkpointing=True,
+            gradient_checkpointing_kwargs={"use_reentrant": False},
+            torch_empty_cache_steps=50,
+        )
+        self._early_cb = EarlyStoppingCallback(
+            early_stopping_patience=early_stopping_patience,
+            early_stopping_threshold=early_stopping_threshold,
+        )
+
+    def _fit_lora(
+        self,
+        train_texts: list[str],
+        val_texts: list[str],
+        y_train: np.ndarray,
+        y_val: np.ndarray,
+        question: str,
+    ):
+        """Fine-tune the model using LoRA with early stopping"""
+        logger.info(f"Starting LoRA fine-tuning with {len(train_texts)} train and {len(val_texts)} val samples")
+        logger.info(f"Question/instruction: {question[:100]}..." if len(question) > 100 else f"Question/instruction: {question}")
+
+        logger.info("Creating training and validation datasets...")
+        ds_tr = _NextTokenYesNoDataset(
+            self._decoder, train_texts, y_train, question, reserve_extra_tokens=8
+        )
+        ds_va = _NextTokenYesNoDataset(
+            self._decoder, val_texts, y_val, question, reserve_extra_tokens=8
+        )
+
+        collator = _PadCollator(
+            self._decoder.tokenizer.pad_token_id,
+            label_pad_id=-100,
+            max_len=self._decoder.max_context_tokens,
+        )
+
+        def _peek(ds, n=64):
+            mx = 0
+            arg = -1
+            for i in range(min(n, len(ds))):
+                L = len(ds[i]["input_ids"])
+                if L > mx:
+                    mx, arg = L, i
+            print(f"[FT] peek max seq_len among first {min(n,len(ds))}: {mx} (idx={arg})")
+
+        _peek(ds_tr)
+        _peek(ds_va)
+
+        # Workaround for Accelerate optimizer wrapping issue
+        import torch.optim as _optim
+        def _noop(self, *args, **kwargs):
+            return None
+        if not hasattr(_optim.AdamW, "train"):
+            _optim.AdamW.train = _noop
+        if not hasattr(_optim.AdamW, "eval"):
+            _optim.AdamW.eval = _noop
+
+        logger.info("Setting up Trainer with early stopping...")
+        args = TrainingArguments(**self._train_args_tpl)
+        trainer = Trainer(
+            model=self._decoder.model,
+            args=args,
+            train_dataset=ds_tr,
+            eval_dataset=ds_va,
+            data_collator=collator,
+        )
+        trainer.add_callback(self._early_cb)
+
+        logger.info("Starting training...")
+        train_out = trainer.train()
+        logger.info("Training completed!")
+
+        if self.show_progress:
+            print(
+                f"[LoRA] Finished at epoch={train_out.metrics.get('epoch', None)}  best eval_loss={trainer.state.best_metric}"
+            )
+        self._decoder.model.eval()
+
+    def _sanity_check_probabilities(self, texts: list[str], labels: np.ndarray, question: str, phase: str):
+        """Print average Yes/No probabilities for a small batch as a sanity check"""
+        if len(texts) == 0:
+            print(f"Sanity check skipped {phase}: no samples provided")
+            return
+        try:
+            probs_dict = self._decoder.predict_proba(texts, question, batch_size=len(texts))
+            p_yes = probs_dict["p_yes_2way"].float().cpu().numpy()
+            p_no = probs_dict["p_no_2way"].float().cpu().numpy()
+
+            # Calculate averages by true label
+            pos_indices = labels == 1
+            neg_indices = labels == 0
+
+            if pos_indices.sum() > 0:
+                avg_yes_for_pos = p_yes[pos_indices].mean()
+                avg_no_for_pos = p_no[pos_indices].mean()
+            else:
+                avg_yes_for_pos = avg_no_for_pos = 0.0
+
+            if neg_indices.sum() > 0:
+                avg_yes_for_neg = p_yes[neg_indices].mean()
+                avg_no_for_neg = p_no[neg_indices].mean()
+            else:
+                avg_yes_for_neg = avg_no_for_neg = 0.0
+
+            print(f"\n=== SANITY CHECK {phase} ===")
+            print(f"Sample size: {len(texts)} (pos: {pos_indices.sum()}, neg: {neg_indices.sum()})")
+            print(f"For TRUE POSITIVE samples:")
+            print(f"  Avg P(Yes) = {avg_yes_for_pos:.4f}, Avg P(No) = {avg_no_for_pos:.4f}")
+            print(f"For TRUE NEGATIVE samples:")
+            print(f"  Avg P(Yes) = {avg_yes_for_neg:.4f}, Avg P(No) = {avg_no_for_neg:.4f}")
+            print(f"Overall averages:")
+            print(f"  Avg P(Yes) = {p_yes.mean():.4f}, Avg P(No) = {p_no.mean():.4f}")
+            print("=" * 40)
+
+        except Exception as e:
+            print(f"Sanity check failed {phase}: {e}")
+
+    def run_evaluation(
+        self,
+        sub_task: str,
+        X_train_texts: list[str],
+        X_val_texts: list[str],
+        X_test_texts: list[str],
+        y_train: np.ndarray,
+        y_val: np.ndarray,
+        y_test: np.ndarray,
+        n_jobs: int = 1,
+        test_patient_ids: np.ndarray | None = None,
+        eval_train_val: bool = False,
+        **kwargs,
+    ):
+        question = kwargs.get("question_override")
+        if not question:
+            raise ValueError(
+                "question_override is required: instructions must come from the "
+                "serializations pickle (entry[0]), never from a generated default"
+            )
+
+        logger.critical(
+            f"Start | Evaluating llm_decoder_ft (LoRA) with {self.model_name} on '{sub_task}'"
+        )
+        logger.info(
+            f"Train N={len(X_train_texts)}  Val N={len(X_val_texts)}  Test N={len(X_test_texts)}"
+        )
+
+        def _safe_mean(arr: np.ndarray) -> float:
+            return float(np.mean(arr)) if arr.size > 0 else float("nan")
+
+        train_empty = len(X_train_texts) == 0 or y_train.size == 0
+        val_empty = len(X_val_texts) == 0 or y_val.size == 0
+
+        logger.info(
+            f"Prevalence: train={_safe_mean(y_train):.4f} val={_safe_mean(y_val):.4f} test={_safe_mean(y_test):.4f}"
+        )
+
+        if train_empty:
+            raise ValueError(
+                "LoRA fine-tuning requires non-empty train split; got empty train split "
+                f"for sub_task='{sub_task}', k={kwargs.get('k', 'unknown')}, replicate={kwargs.get('replicate', 'unknown')}."
+            )
+
+        if val_empty:
+            raise ValueError(
+                "LoRA fine-tuning requires non-empty val split; got empty val split "
+                f"for sub_task='{sub_task}', k={kwargs.get('k', 'unknown')}, replicate={kwargs.get('replicate', 'unknown')}."
+            )
+
+        # Sanity check: probabilities before fine-tuning
+        if self.show_progress:
+            batch_samples = min(self.batch_size, len(X_train_texts))
+            if batch_samples > 0:
+                self._sanity_check_probabilities(
+                    X_train_texts[:batch_samples],
+                    y_train[:batch_samples],
+                    question,
+                    "BEFORE fine-tuning",
+                )
+
+        # Fine-tune with early stopping
+        self._fit_lora(X_train_texts, X_val_texts, y_train, y_val, question)
+
+        # Sanity check: probabilities after fine-tuning
+        if self.show_progress:
+            batch_samples = min(self.batch_size, len(X_train_texts))
+            if batch_samples > 0:
+                self._sanity_check_probabilities(
+                    X_train_texts[:batch_samples],
+                    y_train[:batch_samples],
+                    question,
+                    "AFTER fine-tuning",
+                )
+
+        # Score with fine-tuned model - always calculate test probabilities
+        logger.info("Computing test set probabilities with fine-tuned model...")
+        y_test_proba = (
+            self._decoder.score(X_test_texts, question=question, batch_size=self.batch_size)
+            .cpu()
+            .float()
+            .numpy()
+        )
+
+        # Only calculate train/val probabilities if requested
+        y_train_proba = None
+        y_val_proba = None
+        if eval_train_val:
+            logger.info("Computing train set probabilities with fine-tuned model...")
+            y_train_proba = (
+                self._decoder.score(X_train_texts, question=question, batch_size=self.batch_size)
+                .cpu()
+                .float()
+                .numpy()
+            )
+            logger.info("Computing validation set probabilities with fine-tuned model...")
+            y_val_proba = (
+                self._decoder.score(X_val_texts, question=question, batch_size=self.batch_size)
+                .cpu()
+                .float()
+                .numpy()
+            )
+
+        y_test_pred = (y_test_proba >= 0.5).astype(int)
+        metric_dict = {
+            "auroc": metrics.roc_auc_score,
+            "brier": metrics.brier_score_loss,
+            "auprc": metrics.average_precision_score,
+        }
+        scores = {}
+        for metric, func in metric_dict.items():
+            scores[metric] = {}
+            test_score = func(y_test, y_test_proba)
+            train_score = None
+            val_score = None
+
+            if eval_train_val and y_train_proba is not None and y_val_proba is not None:
+                train_score = func(y_train, y_train_proba)
+                val_score = func(y_val, y_val_proba)
+                logger.info(
+                    f"{metric.upper()} | train={train_score:.4f} val={val_score:.4f} test={test_score:.4f}"
+                )
+            else:
+                logger.info(f"{metric.upper()} | test={test_score:.4f}")
+
+            if test_patient_ids is None:
+                test_patient_ids = np.arange(len(y_test))
+            unique_ids = sorted(set(test_patient_ids))
+
+            boots = []
+            for i in range(1000):
+                sample = sklearn.utils.resample(unique_ids, random_state=i)
+                counts = collections.Counter(sample)
+                weights = np.array([counts.get(pid, 0) for pid in test_patient_ids], dtype=float)
+                if weights.sum() == 0:
+                    continue
+                boots.append(func(y_test, y_test_proba, sample_weight=weights))
+
+            lower, upper = np.percentile(boots, [2.5, 97.5])
+            scores[metric].update(
+                score=float(test_score),
+                std=float(np.std(boots, ddof=1)),
+                lower=float(lower),
+                mean=float(np.mean(boots)),
+                upper=float(upper),
+            )
+            if train_score is not None:
+                scores[metric]["train_score"] = float(train_score)
+            if val_score is not None:
+                scores[metric]["val_score"] = float(val_score)
+
+        model_like = {
+            "head": (
+                "decoder_yesno_after_think_ft"
+                if self._decoder.answer_after_think
+                else "decoder_yesno_ft"
+            ),
+            "backbone": self.model_name,
+            "sub_task": sub_task,
+            "batch_size": self.batch_size,
+            "max_input_length": self.max_input_length,
+            "lora": {
+                "r": self._lora_cfg.r,
+                "alpha": self._lora_cfg.lora_alpha,
+                "dropout": self._lora_cfg.lora_dropout,
+                "targets": self._lora_cfg.target_modules,
+            },
+        }
+        return model_like, scores
+
+def run_single_experiment(args, splits_to_serializations, tasks_serializations, show_progress):
+    """Run a single experiment configuration"""
+    results = []
+    model = "llm"
+    zero_shot = args.k == 0
+    if (not zero_shot) and args.icl_shots > 0:
+        raise ValueError(
+            "Invalid decoder configuration: LoRA fine-tuning (k>0) and ICL (icl_shots>0) cannot be enabled simultaneously."
+        )
+    
+    # Calculate effective batch size
+    effective_batch_size = args.effective_batch_size
+    if effective_batch_size is None:
+        effective_batch_size = min(args.k, 8) if args.k > 0 else 8
+    
+    # Create unique output directory for this experiment
+    model_safe = re.sub(r'[^\w\-_\.]', '_', args.model_name.replace('/', '_'))
+    unique_output_dir = None
+
+    if zero_shot:
+        logger.info(
+            "k=0 detected; running zero-shot evaluation without LoRA fine-tuning"
+        )
+        logger.info(f"Creating llm_decoder classifier with model={args.model_name}")
+        clf = llm_decoder(
+            model_name=args.model_name,
+            max_input_length=args.max_input_length,
+            batch_size=args.batch_size,
+            show_progress=show_progress,
+            icl_shots=args.icl_shots,
+            icl_seed=args.icl_seed,
+            icl_source_split=args.icl_source_split,
+            enable_yarn=args.enable_yarn,
+            yarn_factor=args.yarn_factor,
+            yarn_original_max_position_embeddings=args.yarn_original_max_position_embeddings,
+            icl_examples_max_tokens=args.icl_examples_max_tokens,
+            base_prompt_max_tokens=args.base_prompt_max_tokens,
+        )
+    else:
+        unique_output_dir = (
+            f"./tmp_llm_decoder_ft_{model_safe}_{args.sub_task}_k{args.k}_r{args.replicate}_{os.getpid()}"
+        )
+
+        logger.info(f"Creating llm_decoder_ft classifier with model={args.model_name}")
+        logger.info(
+            f"LoRA configuration: r={args.lora_r}, alpha={args.lora_alpha}, dropout={args.lora_dropout}"
+        )
+        logger.info(
+            f"Training configuration: lr={args.lr}, warmup_ratio={args.warmup_ratio}, max_epochs={args.num_train_epochs_cap}"
+        )
+        logger.info(
+            f"Batch configuration: batch_size={args.batch_size}, effective_batch_size={effective_batch_size}"
+        )
+
+        clf = llm_decoder_ft(
+            model_name=args.model_name,
+            max_input_length=args.max_input_length,
+            batch_size=args.batch_size,
+            show_progress=show_progress,
+            icl_shots=args.icl_shots,
+            icl_seed=args.icl_seed,
+            icl_source_split=args.icl_source_split,
+            enable_yarn=args.enable_yarn,
+            yarn_factor=args.yarn_factor,
+            yarn_original_max_position_embeddings=args.yarn_original_max_position_embeddings,
+            icl_examples_max_tokens=args.icl_examples_max_tokens,
+            base_prompt_max_tokens=args.base_prompt_max_tokens,
+            lora_r=args.lora_r,
+            lora_alpha=args.lora_alpha,
+            lora_dropout=args.lora_dropout,
+            lr=args.lr,
+            warmup_ratio=args.warmup_ratio,
+            num_train_epochs_cap=args.num_train_epochs_cap,
+            effective_batch_size=effective_batch_size,
+            output_dir=unique_output_dir,
+        )
+
+    print(f"Model: {model} | Task: {args.sub_task} | k: {args.k} | replicate: {args.replicate}")
+
+    if args.k == -1:
+        # Use all available training data (no shot_size filter)
+        logger.info("Using all available training data (no shot_size filter)")
+        task_split = splits_to_serializations[
+            (splits_to_serializations["task"] == args.sub_task)
+            & (splits_to_serializations["fold"] == args.replicate)
+        ]
+    else:
+        # Use specific shot size
+        logger.info(f"Using shot_size={args.k} for training data")
+        task_split = splits_to_serializations[
+            (splits_to_serializations["task"] == args.sub_task)
+            & (splits_to_serializations["shot_size"] == args.k)
+            & (splits_to_serializations["fold"] == args.replicate)
+        ]
+
+    logger.info("Extracting train, validation, and test splits...")
+    train_split = task_split[task_split["split_name"] == "train"]
+    val_split = task_split[task_split["split_name"] == "val"]
+    test_split = splits_to_serializations[
+        (splits_to_serializations["task"] == args.sub_task)
+        & (splits_to_serializations["split_name"] == "test")
+    ]
+
+    rng = np.random.default_rng(args.subset_seed)
+    val_split = _maybe_limit_split(val_split, args.val_limit, rng, "validation", args.subset_seed)
+    test_split = _maybe_limit_split(test_split, args.test_limit, rng, "test", args.subset_seed)
+
+    logger.info(f"Split sizes - Train: {len(train_split)}, Val: {len(val_split)}, Test: {len(test_split)}")
+
+    logger.info("Loading serialized data for train/val/test splits...")
+    X_train_k = [
+        tasks_serializations[idx][1] for idx in train_split["serialization_idx"].values
+    ]
+    X_val_k = [
+        tasks_serializations[idx][1] for idx in val_split["serialization_idx"].values
+    ]
+    X_test = [
+        tasks_serializations[idx][1] for idx in test_split["serialization_idx"].values
+    ]
+    y_train_k = np.array(train_split["label_value"].values)
+    y_val_k = np.array(val_split["label_value"].values)
+    y_test = np.array(test_split["label_value"].values)
+    test_patient_ids = test_split["patient_id"].values
+
+    icl_source_texts = None
+    icl_source_labels = None
+    if args.icl_shots > 0:
+        source_split = splits_to_serializations[
+            (splits_to_serializations["task"] == args.sub_task)
+            & (splits_to_serializations["fold"] == args.replicate)
+            & (splits_to_serializations["split_name"] == args.icl_source_split)
+        ]
+        if len(source_split) > 0 and "shot_size" in source_split.columns:
+            max_shot_size = int(source_split["shot_size"].max())
+            source_split = source_split[source_split["shot_size"] == max_shot_size]
+        icl_source_texts = [
+            tasks_serializations[idx][1] for idx in source_split["serialization_idx"].values
+        ]
+        icl_source_labels = np.array(source_split["label_value"].values)
+        icl_source_serialization_ids = source_split["serialization_idx"].values
+        logger.info(
+            f"ICL source split '{args.icl_source_split}' size={len(icl_source_texts)} "
+            f"(seed={args.icl_seed})"
+        )
+    else:
+        icl_source_serialization_ids = None
+
+    candidate_instruction_indices: list[int] = []
+    candidate_instruction_indices.extend(train_split["serialization_idx"].values.tolist())
+    candidate_instruction_indices.extend(val_split["serialization_idx"].values.tolist())
+    candidate_instruction_indices.extend(test_split["serialization_idx"].values.tolist())
+    if icl_source_serialization_ids is not None:
+        candidate_instruction_indices.extend(icl_source_serialization_ids.tolist())
+
+    resolved_instruction = resolve_instruction_from_serializations(
+        tasks_serializations=tasks_serializations,
+        serialization_indices=candidate_instruction_indices,
+        sub_task=args.sub_task,
+    )
+    logger.info(f"Resolved decoder instruction from serializations: {resolved_instruction}")
+
+    logger.info(f"Label prevalences - Train: {np.mean(y_train_k):.4f}, Val: {np.mean(y_val_k):.4f}, Test: {np.mean(y_test):.4f}")
+    logger.info(f"Starting model evaluation with eval_train_val={args.eval_train_val}...")
+
+    best_model, scores = clf.run_evaluation(
+        args.sub_task,
+        X_train_k,
+        X_val_k,
+        X_test,
+        y_train_k,
+        y_val_k,
+        y_test,
+        n_jobs=args.num_threads,
+        test_patient_ids=test_patient_ids,
+        eval_train_val=args.eval_train_val,
+        icl_source_texts=icl_source_texts,
+        icl_source_labels=icl_source_labels,
+        train_serialization_ids=train_split["serialization_idx"].values,
+        val_serialization_ids=val_split["serialization_idx"].values,
+        test_serialization_ids=test_split["serialization_idx"].values,
+        icl_source_serialization_ids=icl_source_serialization_ids,
+        question_override=resolved_instruction,
+        k=args.k,
+        replicate=args.replicate,
+    )
+
+    for score_name, score_value in scores.items():
+        row = {
+            "labeling_function": args.labeling_function,
+            "sub_task": args.sub_task,
+            "model": model,
+            "replicate": args.replicate,
+            "k": args.k,
+            "score": score_name,
+            "selection_metric": "auroc",
+            "value": score_value["score"],
+            "value_test": score_value["score"],
+            "value_val": score_value.get("val_score"),
+            "icl_shots": args.icl_shots,
+            "icl_seed": args.icl_seed,
+            "icl_source_split": args.icl_source_split,
+            "std": score_value["std"],
+            "lower": score_value["lower"],
+            "mean": score_value["mean"],
+            "upper": score_value["upper"],
+        }
+        if "train_score" in score_value:
+            row["value_train"] = score_value["train_score"]
+        results.append(row)
+    
+    print(f"Scores: {scores}")
+    
+    # Clean up temporary checkpoint directory
+    if unique_output_dir is not None:
+        import shutil
+        try:
+            if os.path.exists(unique_output_dir):
+                shutil.rmtree(unique_output_dir)
+                print(f"Cleaned up temporary directory: {unique_output_dir}")
+        except Exception as e:
+            print(f"Warning: Could not clean up {unique_output_dir}: {e}")
+    
+    return results
+
+if __name__ == "__main__":
+    main()

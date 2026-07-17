@@ -153,6 +153,123 @@ In contrast, **EHRSHOT** contains (1) the full breadth of longitudinal data that
   <tr> <td><a href="https://www.sciencedirect.com/science/article/pii/S1532046419302564?via%3Dihub">Solares 2020</a></td> <td>CPRD</td> <td>✓</td> <td>✓</td> <td>4M</td> <td>2</td> <td>--</td> <td>--</td> <td>--</td> <td>--</td> </tr>
 </table>
 
+<a name="llm_experiments"/>
+
+# 🧪 LLM Finetuning and In-Context Learning Experiments
+
+This section reproduces the large-language-model (LLM) experiments that extend the benchmark: a hyperparameter search that justifies the finetuning settings, tuned finetuning of an encoder (Qwen3-Embedding-8B + LoRA) and a decoder (Qwen3-8B + LoRA), and decoder in-context learning (ICL) as a finetuning-free few-shot alternative. For any given run, few-shot adaptation is *either* in-context examples *or* LoRA finetuning; the two are never combined.
+
+All commands are run from `ehrshot/bash_scripts/`, so the `../..` relative paths (used verbatim in the scripts and configs) resolve against the repo root:
+
+```bash
+cd ehrshot/bash_scripts
+```
+
+## Prerequisites
+
+These scripts consume two user-supplied inputs under `EHRSHOT_ASSETS/benchmark/`. They are not shipped in the repo, and the scripts fail immediately (no fallback) if either is missing:
+
+- A serialized-samples pickle. Each entry holds the natural-language task instruction (`entry[0]`) and the serialized patient record that every prompt is built from. These experiments use `serializations_instructions_rebuttal2.pkl`. The search config already points at it; the single-run scripts default their `--serializations_path` to `tasks_serializations.pkl`, so pass `--serializations_path .../serializations_instructions_rebuttal2.pkl` to use it.
+- A splits-to-serializations CSV, `ehrshot_splits_to_serializations.csv`, mapping each sample to its train/val/test split (script flag `--splits_path`, which defaults to that filename).
+
+## 1. Hyperparameter search
+
+Search the finetuning hyperparameters over `lr ∈ {5e-5, 1e-4, 2e-4}` × `lora_r ∈ {8, 16, 64}` × `lora_dropout ∈ {0.0, 0.05, 0.1}` = 27 configs per model type, evaluated on the `guo_*` (3) and `new_*` (6) tasks at `k ∈ {8, 16}` with one replicate. Across both model types this is `27 × 9 × 2 × 2 = 972` jobs. `batch_size` (4), `effective_batch_size` (8), `lora_alpha` (32), and `warmup_ratio` (0.03) are held fixed. The full grid, task list, and config ids live in `ehrshot/configs/tuning_grid.yaml`.
+
+The driver runs in three phases:
+
+```bash
+# 1. Plan: write the job manifest for the grid.
+python3 ../11_tune_finetuning_params.py --config ../configs/tuning_grid.yaml --plan-only
+
+# 2. Run: one GPU job per grid point (array task id = job index).
+sbatch --array=0-971 11_tune_finetuning_params.sh
+
+# 3. Collect: aggregate the per-job result CSVs into the tuning results.
+python3 ../11_tune_finetuning_params.py --config ../configs/tuning_grid.yaml --collect-only
+```
+
+## 2. Select the best configuration
+
+Choose the winning config per model type by the mean **validation** AUROC over each `(labeling_function, config_id)` pair. Selection is **global**: exactly one config for the encoder and one for the decoder — not per task, not per k — and the test split is never used.
+
+```bash
+python3 ../select_best_params.py \
+    --input_csv ../../EHRSHOT_ASSETS/experiments/tuning/tuning_results_raw.csv \
+    --output_dir ../../EHRSHOT_ASSETS/experiments/tuning/selected \
+    --config ../configs/tuning_grid.yaml
+```
+
+This writes `best_params_encoder.json` and `best_params_decoder.json` (plus an aggregated CSV) to `--output_dir`. The frozen winners are also committed under `ehrshot/configs/` as the record of the search outcome: `enc_lr5e5_r8_d010` (mean val AUROC 0.7027) for the encoder and `dec_lr2e4_r8_d005` (mean val AUROC 0.6713) for the decoder.
+
+## 3. Single finetune + eval runs
+
+Finetune and evaluate one model on one `(task, k, replicate)` with LoRA. The encoder entry point is `10a_fit_and_eval_encoder.py`; the decoder is `10b_fit_and_eval_decoder.py`. The wrappers default to `guo_los`, `k=32`, replicate 0; edit `--sub_task` / `--k` / `--replicate` to select a run (these are the same knobs the search driver sweeps):
+
+```bash
+sbatch 10a_fit_and_eval_encoder.sh   # encoder
+sbatch 10b_fit_and_eval_decoder.sh   # decoder
+```
+
+Direct form (encoder shown; the decoder is identical with `10b_...`):
+
+```bash
+python3 ../10a_fit_and_eval_encoder.py \
+    --sub_task guo_los --k 32 --replicate 0 \
+    --serializations_path ../../EHRSHOT_ASSETS/benchmark/serializations_instructions_rebuttal2.pkl \
+    --output_dir ../../EHRSHOT_ASSETS/experiments/llm_variants
+```
+
+Each run writes a per-run results CSV into `--output_dir`. Here `--k` is the few-shot label budget in the EHRSHOT convention (examples per class).
+
+## 4. Decoder in-context learning (finetuning-free)
+
+Instead of LoRA finetuning, evaluate the decoder with few-shot in-context examples. `--icl_shots ∈ {0, 2, 4, 6}` sets the total number of in-context examples, drawn balanced across the two labels (half positive, half negative). Examples are sampled from the train split, and the target sample is never selectable as one of its own examples. Every record is truncated independently: each in-context example and the target record are each capped at 4096 tokens, under an overall prompt budget of 32768 tokens. Long-context runs must set `--batch_size 1`.
+
+```bash
+python3 ../10b_fit_and_eval_decoder.py \
+    --sub_task guo_los --k 32 --replicate 0 \
+    --icl_shots 4 \
+    --batch_size 1 \
+    --max_input_length 32768 \
+    --icl_examples_max_tokens 4096 \
+    --base_prompt_max_tokens 4096 \
+    --serializations_path ../../EHRSHOT_ASSETS/benchmark/serializations_instructions_rebuttal2.pkl \
+    --output_dir ../../EHRSHOT_ASSETS/experiments/llm_variants
+```
+
+Use `--icl_shots 0` for the zero-shot baseline. The `10b_fit_and_eval_decoder.sh` wrapper also contains ready-to-edit ICL invocations.
+
+## 5. Tuned full-matrix rerun
+
+Rerun finetuning across the full task/k matrix using the frozen best-params JSONs, so the reported finetuning numbers use the searched hyperparameters. The rerun spec is `ehrshot/configs/finetuning_full_matrix.yaml`; the winning configs are committed as `ehrshot/configs/best_params_encoder.json` and `best_params_decoder.json` (with their validation AUROCs). Before submitting the array, edit the `--config` in `11_tune_finetuning_params.sh` to point at `../configs/finetuning_full_matrix.yaml`.
+
+```bash
+# 1. Plan (also prints the planned job count N).
+python3 ../11_tune_finetuning_params.py --config ../configs/finetuning_full_matrix.yaml --plan-only
+
+# 2. Run the array (use 0-(N-1) with the count printed by --plan-only).
+sbatch --array=0-<N-1> 11_tune_finetuning_params.sh
+
+# 3. Collect.
+python3 ../11_tune_finetuning_params.py --config ../configs/finetuning_full_matrix.yaml --collect-only
+```
+
+## 6. Merge and plot
+
+Merge the per-run result CSVs, join the tuning summary, and produce the comparison figures and tables. All five arguments are required:
+
+```bash
+python3 ../12_merge_and_plot_revision_results.py \
+    --results_dir ../../EHRSHOT_ASSETS/experiments/llm_variants \
+    --extra_results_dir ../../EHRSHOT_ASSETS/experiments/tuning/run_outputs \
+    --output_file ../../EHRSHOT_ASSETS/figures/merged_results.csv \
+    --tuning_results_csv ../../EHRSHOT_ASSETS/experiments/tuning/tuning_results_raw.csv \
+    --baseline_dir ../../EHRSHOT_ASSETS/results
+```
+
+This writes the merged CSV to `--output_file` and the figures/tables into the figures directory.
+
 <a name="other"/>
 
 # Other
