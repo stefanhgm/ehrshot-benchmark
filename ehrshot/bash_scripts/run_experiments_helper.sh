@@ -13,7 +13,6 @@
 
 # Single GPU resources: 
 ##SBATCH --partition=gpu
-##SBATCH --gres=gpu:nvidia_a100_80gb_pcie:1
 ##SBATCH --mem=480GB
 
 # CPU
