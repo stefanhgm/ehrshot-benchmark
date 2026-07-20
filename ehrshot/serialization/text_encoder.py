@@ -480,6 +480,11 @@ class BertEncoder(BERTLLMEncoder):
             )
             self.model = AutoModel.from_pretrained(bert_identifier, use_safetensors=False, **model_kwargs).to(self.device)
 
+        # ModernBERT JIT-compiles its embeddings/MLP via torch.compile when config.reference_compile
+        # is enabled (auto-True on a triton GPU). torch.compile is incompatible with torch.nn.DataParallel
+        if hasattr(self.model.config, "reference_compile"):
+            self.model.config.reference_compile = False
+
         # Enable multi-gpu support
         if torch.cuda.device_count() > 1:
             print(f"Using {torch.cuda.device_count()} GPUs.")
