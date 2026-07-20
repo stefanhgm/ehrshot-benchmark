@@ -441,11 +441,17 @@ class STGTELargeENv15Encoder(LLMEncoder):
 
 class BertEncoder(BERTLLMEncoder):
     
-    def __init__(self, max_input_length: int, bert_identifier: str, embedding_size: int, model_max_input_length: int, concat_embeddings: bool = False, include_instruction: bool = False, **kwargs) -> None:
+    def __init__(self, max_input_length: int, bert_identifier: str, embedding_size: int, model_max_input_length: int, concat_embeddings: bool = False, include_instruction: bool = False, torch_dtype: Optional[str] = None, **kwargs) -> None:
         # use variable bert_identifier, embedding_size, model_max_input_length to allow for different BERT models
         super().__init__(embedding_size=embedding_size, model_max_input_length=model_max_input_length, max_input_length=max_input_length)
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.tokenizer = AutoTokenizer.from_pretrained(bert_identifier)
+
+        # Optional weight dtype (e.g. 'bfloat16'). BioClinical ModernBERT runs in its native
+        # bf16 + Flash Attention 2 setup - flash-attn is auto-selected but only supports fp16/bf16,
+        # so the default fp32 crashes with an illegal CUDA memory access. None keeps the fp32
+        # default used by the other BERT baselines.
+        self.torch_dtype = getattr(torch, torch_dtype) if isinstance(torch_dtype, str) else torch_dtype
 
         # When True, prepend the task-specific instruction to each text so the (mean-pooled)
         # embedding is guided by it - used for long-context encoders (e.g. BioClinical ModernBERT)
@@ -458,15 +464,21 @@ class BertEncoder(BERTLLMEncoder):
             max_chunks = BASE_INPUT_LENGTH // self.max_input_length
             self.embedding_size = self.per_chunk_embedding_size * max_chunks
 
+        # Only pass torch_dtype when explicitly set, to keep the default (fp32) behaviour for
+        # the standard BERT/DeBERTa baselines unchanged.
+        model_kwargs = {}
+        if self.torch_dtype is not None:
+            model_kwargs["torch_dtype"] = self.torch_dtype
+
         # Prefer safetensors, but allow fallback to PyTorch bin weights
         try:
-            self.model = AutoModel.from_pretrained(bert_identifier, use_safetensors=True).to(self.device)
+            self.model = AutoModel.from_pretrained(bert_identifier, use_safetensors=True, **model_kwargs).to(self.device)
         except Exception as e_safetensors:
             print(
                 f"[WARN] Could not load safetensors for '{bert_identifier}'. "
                 f"Falling back to PyTorch weights (.bin). Error was: {e_safetensors}"
             )
-            self.model = AutoModel.from_pretrained(bert_identifier, use_safetensors=False,).to(self.device)
+            self.model = AutoModel.from_pretrained(bert_identifier, use_safetensors=False, **model_kwargs).to(self.device)
 
         # Enable multi-gpu support
         if torch.cuda.device_count() > 1:
@@ -513,7 +525,9 @@ class BertEncoder(BERTLLMEncoder):
                 # For implementation see: https://github.com/autoliuweijie/BERT-whitening-pytorch/blob/b5cfbd606bd19fc3b3adf9e074dc0bfd830ef597/all_utils.py#L33
                 # Want to reproduce Jiang et al. Health system-scale language models are all-purpose prediction engines 2023. However, unclear what MLM classification head exactly means.
                 last_avg_embedding = outputs.hidden_states[-1].mean(dim=1)
-                all_embeddings_list.append(last_avg_embedding.cpu().numpy())
+                # .float() is a no-op for fp32 baselines but is required for bf16 models
+                # (e.g. BioClinical ModernBERT) since numpy cannot convert bf16 directly.
+                all_embeddings_list.append(last_avg_embedding.float().cpu().numpy())
 
         all_embeddings = np.concatenate(all_embeddings_list, axis=0)
 
