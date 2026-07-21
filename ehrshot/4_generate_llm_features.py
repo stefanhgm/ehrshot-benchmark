@@ -158,8 +158,10 @@ if __name__ == "__main__":
         'deberta_v3_large-concat': lambda max_input_length: BertEncoder(max_input_length=max_input_length, bert_identifier='microsoft/deberta-v3-large', embedding_size=1024, model_max_input_length=512, concat_embeddings=True),
         # BioClinical ModernBERT: native 8192-token context (no chunking) and receives the
         # same instruct+EHR input as the LLM embedding models (include_instruction=True).
-        'bioclinical_modernbert_base': lambda max_input_length: BertEncoder(max_input_length=max_input_length, bert_identifier='thomas-sounack/BioClinical-ModernBERT-base', embedding_size=768, model_max_input_length=8192, include_instruction=True, torch_dtype='bfloat16'),
-        'bioclinical_modernbert_large': lambda max_input_length: BertEncoder(max_input_length=max_input_length, bert_identifier='thomas-sounack/BioClinical-ModernBERT-large', embedding_size=1024, model_max_input_length=8192, include_instruction=True, torch_dtype='bfloat16'),
+        # mask_mean_pooling because most inputs are shorter than 8192 tokens and ModernBERT
+        # pads them with zeros, which would otherwise be averaged into the embedding.
+        'bioclinical_modernbert_base': lambda max_input_length: BertEncoder(max_input_length=max_input_length, bert_identifier='thomas-sounack/BioClinical-ModernBERT-base', embedding_size=768, model_max_input_length=8192, include_instruction=True, torch_dtype='bfloat16', mask_mean_pooling=True),
+        'bioclinical_modernbert_large': lambda max_input_length: BertEncoder(max_input_length=max_input_length, bert_identifier='thomas-sounack/BioClinical-ModernBERT-large', embedding_size=1024, model_max_input_length=8192, include_instruction=True, torch_dtype='bfloat16', mask_mean_pooling=True),
     }
 
     # First check custom llm2vec model, than look up in mapping

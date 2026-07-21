@@ -63,8 +63,17 @@ class LLMEncoder(ABC):
                 
             # BERT models can use larger batch size, since they are generally smaller and use up to 512 tokens
             if self.__class__.__name__ == 'BertEncoder':
-                    batch_size = 512
-                
+                batch_size = 512
+                if self.max_input_length > 512:
+                    # Long-context BERTs (BioClinical ModernBERT, 8192 tokens) hold many more
+                    # activations per sample, so limit the tokens per batch instead of the
+                    # samples per batch. 2**20 tokens gives 128 for 8192 tokens and was measured
+                    # at well below 40 GB per GPU, so it also fits the smallest GPUs of a
+                    # heterogeneous partition.
+                    max_tokens_per_batch = 2 ** 20
+                    batch_size = max(1, max_tokens_per_batch // self.max_input_length)
+
+
             return batch_size
         
         
@@ -439,9 +448,35 @@ class STGTELargeENv15Encoder(LLMEncoder):
                 all_embeddings.append(normalized_embeddings)
             return np.concatenate(all_embeddings, axis=0)
 
+class MeanPooledModel(torch.nn.Module):
+    """Wraps a HF encoder so that the mean pooling happens inside the module."""
+
+    def __init__(self, model: torch.nn.Module, mask_mean_pooling: bool = False) -> None:
+        super().__init__()
+        self.model = model
+        self.config = model.config
+        self.mask_mean_pooling = mask_mean_pooling
+
+    def forward(self, **inputs: Any) -> Tensor:
+        # Get average of all hidden states in the last hidden layer
+        # Shown to be superior to cls token or max (https://arxiv.org/pdf/1908.10084)
+        # For implementation see: https://github.com/autoliuweijie/BERT-whitening-pytorch/blob/b5cfbd606bd19fc3b3adf9e074dc0bfd830ef597/all_utils.py#L33
+        # Want to reproduce Jiang et al. Health system-scale language models are all-purpose prediction engines 2023. However, unclear what MLM classification head exactly means.
+        last_hidden_state = self.model(**inputs).last_hidden_state
+        if not self.mask_mean_pooling:
+            return last_hidden_state.mean(dim=1)
+        # ModernBERT with Flash Attention writes exact zeros at the padded positions, so a plain
+        # mean divides by the padded sequence length and shrinks the embedding of every text
+        # shorter than max_input_length (~75% of the EHR serializations) by a length-dependent
+        # factor. Divide by the number of real tokens instead. The token count is kept in its
+        # integer dtype because bf16 cannot represent counts above 256 exactly.
+        mask = inputs['attention_mask'].unsqueeze(-1)
+        return (last_hidden_state * mask).sum(dim=1) / mask.sum(dim=1)
+
+
 class BertEncoder(BERTLLMEncoder):
-    
-    def __init__(self, max_input_length: int, bert_identifier: str, embedding_size: int, model_max_input_length: int, concat_embeddings: bool = False, include_instruction: bool = False, torch_dtype: Optional[str] = None, **kwargs) -> None:
+
+    def __init__(self, max_input_length: int, bert_identifier: str, embedding_size: int, model_max_input_length: int, concat_embeddings: bool = False, include_instruction: bool = False, torch_dtype: Optional[str] = None, mask_mean_pooling: bool = False, **kwargs) -> None:
         # use variable bert_identifier, embedding_size, model_max_input_length to allow for different BERT models
         super().__init__(embedding_size=embedding_size, model_max_input_length=model_max_input_length, max_input_length=max_input_length)
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -485,6 +520,10 @@ class BertEncoder(BERTLLMEncoder):
         if hasattr(self.model.config, "reference_compile"):
             self.model.config.reference_compile = False
 
+        # Mean-pool inside the module so that only (batch, hidden) instead of
+        # (batch, seq_len, hidden) tensors are gathered across GPUs
+        self.model = MeanPooledModel(self.model, mask_mean_pooling=mask_mean_pooling)
+
         # Enable multi-gpu support
         if torch.cuda.device_count() > 1:
             print(f"Using {torch.cuda.device_count()} GPUs.")
@@ -510,26 +549,22 @@ class BertEncoder(BERTLLMEncoder):
         print(f"Creating chunks for {num_inputs} inputs of size {self.max_input_length} (max_chunks: {max_chunks}).")
         inputs, chunk_counts = self.get_chunked_dataset(inputs, self.tokenizer, max_chunks=max_chunks)
         
-        # For small models increase batch size
+        # For small models increase batch size (local variable, so repeated calls of _encode
+        # for the cached encoding path do not double the batch size again and again)
         base_model = self.model.module if isinstance(self.model, torch.nn.DataParallel) else self.model
-        hidden_size = base_model.config.hidden_size
-        if hidden_size == 768:
-            self.batch_size = self.batch_size * 2
-            
-        print(f"Encoding {len(inputs)} chunks with batch size {self.batch_size}.")
-        dataloader = DataLoader(TextsDataset(inputs), batch_size=self.batch_size, shuffle=False, collate_fn=lambda batch: batch)
-        
+        batch_size = self.batch_size * 2 if base_model.config.hidden_size == 768 else self.batch_size
+
+        print(f"Encoding {len(inputs)} chunks with batch size {batch_size}.")
+        dataloader = DataLoader(TextsDataset(inputs), batch_size=batch_size, shuffle=False, collate_fn=lambda batch: batch)
+
         all_embeddings_list = []
         with torch.no_grad():
             for batch in tqdm(dataloader, desc="Encoding Chunks"):
                 inputs_dict = self.tokenizer(batch, padding=True, truncation=True, max_length=self.max_input_length, return_tensors='pt')
                 inputs_dict = {k: v.to(self.device) for k, v in inputs_dict.items()}
-                outputs = self.model(**inputs_dict, output_hidden_states=True)
-                # Get average of all hidden states in the last hidden layer
-                # Shown to be superior to cls token or max (https://arxiv.org/pdf/1908.10084)
-                # For implementation see: https://github.com/autoliuweijie/BERT-whitening-pytorch/blob/b5cfbd606bd19fc3b3adf9e074dc0bfd830ef597/all_utils.py#L33
-                # Want to reproduce Jiang et al. Health system-scale language models are all-purpose prediction engines 2023. However, unclear what MLM classification head exactly means.
-                last_avg_embedding = outputs.hidden_states[-1].mean(dim=1)
+                # The model is wrapped in MeanPooledModel, so it already returns the mean over
+                # the last hidden layer and only (batch, hidden) is gathered across GPUs
+                last_avg_embedding = self.model(**inputs_dict)
                 # .float() is a no-op for fp32 baselines but is required for bf16 models
                 # (e.g. BioClinical ModernBERT) since numpy cannot convert bf16 directly.
                 all_embeddings_list.append(last_avg_embedding.float().cpu().numpy())
