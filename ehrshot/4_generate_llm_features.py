@@ -7,7 +7,7 @@ from typing import Dict, List, Tuple
 import numpy as np
 # NOTE: workaround for LLM2Vec models that are not compatible with most recent transformers library for ModernBERT, Qwen3
 # from serialization.text_encoder import LLM2VecLlama2_Sheared_1_3B_SupervisedEncoder, LLM2VecLlama3_1_7B_InstructSupervisedEncoder, LLM2VecLlama3_1_7B_InstructSupervisedChunkedEncoder
-from serialization.text_encoder import TextEncoder,  GTEQwen2_7B_InstructEncoder, GTEQwen2_1_5B_InstructEncoder, STGTELargeENv15Encoder, BertEncoder, GTEQwen2_7B_InstructChunkedEncoder, Qwen3Embedding_8B_Encoder, Qwen3Embedding_4B_Encoder, Qwen3Embedding_0_6B_Encoder
+from serialization.text_encoder import TextEncoder,  GTEQwen2_7B_InstructEncoder, GTEQwen2_1_5B_InstructEncoder, STGTELargeENv15Encoder, BertEncoder, GTEQwen2_7B_InstructChunkedEncoder, Qwen3Embedding_8B_Encoder, Qwen3Embedding_4B_Encoder, Qwen3Embedding_0_6B_Encoder, HarrierOSS_270M_Encoder, HarrierOSS_0_6B_Encoder, HarrierOSS_27B_Encoder
 from serialization.ehr_serializer import UniqueThenListVisitsStrategy, UniqueThenListVisitsWithValuesStrategy, UniqueThenListVisitsWOAllCondsStrategy, UniqueThenListVisitsWOAllCondsWithValuesStrategy, UniqueThenListVisitsWOAllCondsWithValuesJSONStrategy, UniqueThenListVisitsWOAllCondsWithValuesXMLStrategy, UniqueThenListVisitsWOAllCondsWithValuesYAMLStrategy, UniqueEventsListStrategy, UniqueEventsListWithTimeStrategy, UniqueEventsListRecentStrategy, UniqueEventsListRecentWithTimeStrategy 
 from serialization.ehr_simple_serializer import UniqueCodesListRecentStrategy, UniqueCodesListRecentWithTimeStrategy, UniqueCodesListStrategy, UniqueCodesListWithTimeStrategy
 from datetime import datetime, timedelta
@@ -143,6 +143,10 @@ if __name__ == "__main__":
         'qwen3_embedding_8b': Qwen3Embedding_8B_Encoder,
         'qwen3_embedding_4b': Qwen3Embedding_4B_Encoder,
         'qwen3_embedding_0_6b': Qwen3Embedding_0_6B_Encoder,
+        # harrier-oss-v1: instruction-conditioned embedding models, same recipe as Qwen3-Embedding
+        'harrier_oss_270m': HarrierOSS_270M_Encoder,
+        'harrier_oss_0_6b': HarrierOSS_0_6B_Encoder,
+        'harrier_oss_27b': HarrierOSS_27B_Encoder,
         'st_gte_large_en_v15': STGTELargeENv15Encoder,
         'bioclinicalbert': lambda max_input_length: BertEncoder(max_input_length=max_input_length, bert_identifier='emilyalsentzer/Bio_ClinicalBERT', embedding_size=768, model_max_input_length=512), 
         'medbert': lambda max_input_length: BertEncoder(max_input_length=max_input_length, bert_identifier='Charangan/MedBERT', embedding_size=768, model_max_input_length=512), 

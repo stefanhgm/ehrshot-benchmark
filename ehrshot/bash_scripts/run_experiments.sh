@@ -56,6 +56,9 @@ text_encoders=(
     
     # "qwen3_embedding_4b"
     # "qwen3_embedding_0_6b"
+    # "harrier_oss_270m"
+    # "harrier_oss_0_6b"
+    # "harrier_oss_27b"
     # "gteqwen2_7b_instruct"
     # "gteqwen2_7b_instruct_chunked_2k"
     # "gteqwen2_7b_instruct_chunked_1k"

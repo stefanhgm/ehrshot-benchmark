@@ -60,7 +60,13 @@ class LLMEncoder(ABC):
                 batch_size = 4
             elif self.__class__.__name__.startswith('Qwen3Embedding_8B') and max_input_length == 8192:
                 batch_size = 2
-                
+
+            # harrier-oss-v1 27b was measured at 59.6 GiB of the 141 GB H200 with the default
+            # batch size, i.e. it was launch-bound rather than memory-bound. A larger batch uses
+            # the idle memory (~78 GiB) and improves utilisation.
+            if self.__class__.__name__.startswith('HarrierOSS_27B') and max_input_length == 8192:
+                batch_size = 24
+
             # BERT models can use larger batch size, since they are generally smaller and use up to 512 tokens
             if self.__class__.__name__ == 'BertEncoder':
                 batch_size = 512
@@ -244,8 +250,12 @@ class Qwen3LLMEncoder(LLMEncoder):
                 batch_dict = self.tokenizer(batch, max_length=self.max_input_length, padding=True, truncation=True, return_tensors='pt').to(self.device) # type: ignore
                 outputs = self.model(**batch_dict) # type: ignore
                 embeddings = self.last_token_pool(outputs.last_hidden_state, batch_dict['attention_mask']) # type: ignore
-                normalized_embeddings = F.normalize(embeddings, p=2, dim=1).cpu().detach().numpy()
-                all_embeddings.append(normalized_embeddings)
+                normalized_embeddings = F.normalize(embeddings, p=2, dim=1)
+                # numpy has no bfloat16, so upcast the bf16 models (harrier-oss-v1) to float32.
+                # The float16 encoders keep their dtype and are therefore unchanged.
+                if normalized_embeddings.dtype == torch.bfloat16:
+                    normalized_embeddings = normalized_embeddings.float()
+                all_embeddings.append(normalized_embeddings.cpu().detach().numpy())
             return np.concatenate(all_embeddings, axis=0)
 
 # NOTE: workaround for LLM2Vec models that are not compatible with most recent transformers library for ModernBERT, Qwen3 
@@ -428,6 +438,54 @@ class Qwen3Embedding_0_6B_Encoder(Qwen3LLMEncoder):
             print(f"Using {torch.cuda.device_count()} GPUs.")
             self.model = torch.nn.DataParallel(self.model)
         
+# harrier-oss-v1 uses the same embedding recipe as Qwen3-Embedding (`Instruct: ...\nQuery: ...`
+# prefix, last-token pooling, L2 normalisation), so these encoders reuse Qwen3LLMEncoder.
+# Weights are published in bfloat16. Flash Attention 2 is used like for the Qwen3 encoders; for
+# the two gemma3 variants it also avoids materialising the sliding-window attention mask, which
+# is what limited throughput with the default implementation. The tokenizers pad right by
+# default, which last_token_pool() handles.
+class HarrierOSS_270M_Encoder(Qwen3LLMEncoder):
+
+    def __init__(self, max_input_length: int, **kwargs) -> None:
+        super().__init__(embedding_size=640, model_max_input_length=32768, max_input_length=max_input_length)
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.tokenizer = AutoTokenizer.from_pretrained('microsoft/harrier-oss-v1-270m')
+        self.model = AutoModel.from_pretrained('microsoft/harrier-oss-v1-270m', attn_implementation="flash_attention_2", torch_dtype=torch.bfloat16).to(self.device)
+
+        # Enable multi-gpu support
+        if torch.cuda.device_count() > 1:
+            print(f"Using {torch.cuda.device_count()} GPUs.")
+            self.model = torch.nn.DataParallel(self.model)
+
+class HarrierOSS_0_6B_Encoder(Qwen3LLMEncoder):
+
+    def __init__(self, max_input_length: int, **kwargs) -> None:
+        super().__init__(embedding_size=1024, model_max_input_length=32768, max_input_length=max_input_length)
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.tokenizer = AutoTokenizer.from_pretrained('microsoft/harrier-oss-v1-0.6b')
+        self.model = AutoModel.from_pretrained('microsoft/harrier-oss-v1-0.6b', attn_implementation="flash_attention_2", torch_dtype=torch.bfloat16).to(self.device)
+
+        # Enable multi-gpu support
+        if torch.cuda.device_count() > 1:
+            print(f"Using {torch.cuda.device_count()} GPUs.")
+            self.model = torch.nn.DataParallel(self.model)
+
+class HarrierOSS_27B_Encoder(Qwen3LLMEncoder):
+
+    def __init__(self, max_input_length: int, **kwargs) -> None:
+        super().__init__(embedding_size=5376, model_max_input_length=32768, max_input_length=max_input_length)
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.tokenizer = AutoTokenizer.from_pretrained('microsoft/harrier-oss-v1-27b')
+        self.model = AutoModel.from_pretrained('microsoft/harrier-oss-v1-27b', attn_implementation="flash_attention_2", torch_dtype=torch.bfloat16).to(self.device)
+
+        # Enable multi-gpu support
+        # NOTE: ~54 GB of weights are replicated per GPU, so this needs the 141 GB H200 nodes.
+        # Replicating keeps every GPU computing, whereas sharding the model across GPUs
+        # (device_map) leaves all but one idle and was measured ~4x slower.
+        if torch.cuda.device_count() > 1:
+            print(f"Using {torch.cuda.device_count()} GPUs.")
+            self.model = torch.nn.DataParallel(self.model)
+
 class STGTELargeENv15Encoder(LLMEncoder):
     
     def __init__(self, max_input_length: int, **kwargs) -> None:
