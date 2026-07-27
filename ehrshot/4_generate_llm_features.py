@@ -1,0 +1,270 @@
+import argparse
+import pickle
+import os
+from loguru import logger
+from utils import check_file_existence_and_handle_force_refresh
+from typing import Dict, List, Tuple
+import numpy as np
+# NOTE: workaround for LLM2Vec models that are not compatible with most recent transformers library for ModernBERT, Qwen3
+# from serialization.text_encoder import LLM2VecLlama2_Sheared_1_3B_SupervisedEncoder, LLM2VecLlama3_1_7B_InstructSupervisedEncoder, LLM2VecLlama3_1_7B_InstructSupervisedChunkedEncoder
+from serialization.text_encoder import TextEncoder,  GTEQwen2_7B_InstructEncoder, GTEQwen2_1_5B_InstructEncoder, STGTELargeENv15Encoder, BertEncoder, GTEQwen2_7B_InstructChunkedEncoder, Qwen3Embedding_8B_Encoder, Qwen3Embedding_4B_Encoder, Qwen3Embedding_0_6B_Encoder, HarrierOSS_270M_Encoder, HarrierOSS_0_6B_Encoder, HarrierOSS_27B_Encoder
+from serialization.ehr_serializer import UniqueThenListVisitsStrategy, UniqueThenListVisitsWithValuesStrategy, UniqueThenListVisitsWOAllCondsStrategy, UniqueThenListVisitsWOAllCondsWithValuesStrategy, UniqueThenListVisitsWOAllCondsWithValuesJSONStrategy, UniqueThenListVisitsWOAllCondsWithValuesXMLStrategy, UniqueThenListVisitsWOAllCondsWithValuesYAMLStrategy, UniqueEventsListStrategy, UniqueEventsListWithTimeStrategy, UniqueEventsListRecentStrategy, UniqueEventsListRecentWithTimeStrategy 
+from serialization.ehr_simple_serializer import UniqueCodesListRecentStrategy, UniqueCodesListRecentWithTimeStrategy, UniqueCodesListStrategy, UniqueCodesListWithTimeStrategy
+from datetime import datetime, timedelta
+from llm_featurizer import LLMFeaturizer, preprocess_llm_featurizer, featurize_llm_featurizer, load_labeled_patients_with_tasks
+import json
+from utils import LABELING_FUNCTION_2_PAPER_NAME
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Generate text-based featurizations for LLM models (for all tasks at once)")
+    parser.add_argument("--path_to_database", required=True, type=str, help="Path to FEMR patient database")
+    parser.add_argument("--path_to_labels_dir", required=True, type=str, help="Path to directory containing saved labels")
+    parser.add_argument("--path_to_features_dir", required=True, type=str, help="Path to directory where features will be saved")
+    parser.add_argument("--task_to_instructions", type=str, default="", help="Path to task to instructions file")
+    parser.add_argument("--num_threads", type=int, help="Number of threads to use")
+    parser.add_argument("--is_force_refresh", action='store_true', default=False, help="If set, then overwrite all outputs")
+    parser.add_argument("--text_encoder", type=str, help="Text encoder to use")
+    parser.add_argument("--serialization_strategy", required=True, type=str, help="Serialization strategy to use")
+    parser.add_argument("--excluded_ontologies", type=str, default="", help="Ontologies to exclude")
+    parser.add_argument("--num_aggregated", type=int, default=0, help="Number of aggregated values to use")
+    parser.add_argument("--time_window_days", type=int, default=0, help="Number of days before label time to consider for each patient")
+    return parser.parse_args()
+    
+if __name__ == "__main__":
+    args = parse_args()
+    NUM_THREADS: int = args.num_threads
+    IS_FORCE_REFRESH = args.is_force_refresh
+    PATH_TO_PATIENT_DATABASE = args.path_to_database
+    PATH_TO_LABELS_DIR = args.path_to_labels_dir
+    PATH_TO_FEATURES_DIR = args.path_to_features_dir
+    PATH_TO_LABELS_FILE: str = os.path.join(PATH_TO_LABELS_DIR, 'all_labels_tasks.csv')
+    PATH_TO_TASK_TO_INSTRUCTIONS_FILE: str = args.task_to_instructions
+    EXCLUDED_ONTOLOGIES: List[str] = ['LOINC', 'Domain', 'CARE_SITE', 'ICDO3'] if args.excluded_ontologies == 'no_labs' else \
+        ['LOINC', 'Domain', 'CARE_SITE', 'ICDO3', 'RxNorm', 'RxNorm Extension'] if args.excluded_ontologies == 'no_labs_meds' else \
+        ['LOINC', 'Domain', 'CARE_SITE', 'ICDO3', 'Medicare Specialty', 'CMS Place of Service', 'OMOP Extension', 'Condition Type'] if args.excluded_ontologies == 'no_labs_single' else \
+        ['LOINC', 'Domain', 'CARE_SITE', 'ICDO3', 'RxNorm', 'RxNorm Extension', 'Medicare Specialty', 'CMS Place of Service', 'OMOP Extension', 'Condition Type']  if args.excluded_ontologies == 'no_labs_meds_single' else \
+        ['CARE_SITE', 'ICDO3'] if args.excluded_ontologies == 'no_unres' else []
+    NUM_AGGREGATED_EVENTS: int = args.num_aggregated  # Default: 0
+    FILTER_AGGREGATED_EVENTS: bool = NUM_AGGREGATED_EVENTS > 0
+    # No aggregated events for list strategies
+    if args.serialization_strategy.startswith('unique_events_list_') or args.serialization_strategy.startswith('unique_codes_list_'):
+        NUM_AGGREGATED_EVENTS = 0
+        FILTER_AGGREGATED_EVENTS = False
+        logger.info(f"For serialization strategy `{args.serialization_strategy}` enforce NUM_AGGREGATED_EVENTS={NUM_AGGREGATED_EVENTS}, FILTER_AGGREGATED_EVENTS={FILTER_AGGREGATED_EVENTS}")
+    # Convert into None or timedelta in days, hack: use negative numbers as hours
+    TIME_WINDOW: timedelta | None = None if args.time_window_days == 0 else (timedelta(days=args.time_window_days) if args.time_window_days > 0 else timedelta(hours=-args.time_window_days))
+
+    # Process serialization ablations for unique_then_list_visits_wo_allconds_w_values_4k
+    ablation_prefix = 'unique_codes_list_recent_8k_no_'
+    ablation_only_prefix = 'unique_codes_list_recent_8k_only_'
+    if args.serialization_strategy.startswith(ablation_prefix):
+        ablation_suffix = args.serialization_strategy[len(ablation_prefix):]
+        # Process appended ablations
+        ablation = [f"no_{component}" for component in ablation_suffix.split('_no_')]
+        args.serialization_strategy = 'unique_codes_list_recent_8k'
+    elif args.serialization_strategy.startswith(ablation_only_prefix):
+        ablation_suffix = args.serialization_strategy[len(ablation_only_prefix):]
+        # Process appended ablations
+        all_parts = ['no_demographics', 'no_visits', 'no_conditions', 'no_medications', 'no_procedures', 'no_labs']
+        only_parts = [component for component in ablation_suffix.split('_only_')]
+        ablation = [part for part in all_parts if part[3:] not in only_parts]
+        args.serialization_strategy = 'unique_codes_list_recent_8k'
+    else:
+        ablation = []
+
+    # Process neutral instructions ablation
+    if args.serialization_strategy.endswith('_neutral'):
+        if PATH_TO_TASK_TO_INSTRUCTIONS_FILE:
+            PATH_TO_TASK_TO_INSTRUCTIONS_FILE = PATH_TO_TASK_TO_INSTRUCTIONS_FILE.replace('task_to_instructions_list.json', 'task_to_instructions_neutral_list.json')
+            print(f"Replaced task to instructions file with neutral instructions file: {PATH_TO_TASK_TO_INSTRUCTIONS_FILE}")
+        args.serialization_strategy = args.serialization_strategy.removesuffix('_neutral')
+
+    # Serialization strategy mapping
+    strategy_map = {
+        'unique_then_list_visits_wo_allconds_w_values': (UniqueThenListVisitsWOAllCondsWithValuesStrategy, 8192),
+        'unique_then_list_visits_wo_allconds_w_values_4k': (UniqueThenListVisitsWOAllCondsWithValuesStrategy, 4096),
+        'unique_then_list_visits_wo_allconds_w_values_2k': (UniqueThenListVisitsWOAllCondsWithValuesStrategy, 2048),
+        'unique_then_list_visits_wo_allconds_w_values_1k': (UniqueThenListVisitsWOAllCondsWithValuesStrategy, 1024),
+        'unique_then_list_visits_wo_allconds_w_values_512': (UniqueThenListVisitsWOAllCondsWithValuesStrategy, 512),
+        'unique_then_list_visits_wo_allconds': (UniqueThenListVisitsWOAllCondsStrategy, 8192),
+        'unique_then_list_visits_wo_allconds_4k': (UniqueThenListVisitsWOAllCondsStrategy, 4096),
+        'unique_then_list_visits_w_values': (UniqueThenListVisitsWithValuesStrategy, 8192),
+        'unique_then_list_visits_w_values_4k': (UniqueThenListVisitsWithValuesStrategy, 4096),
+        'unique_then_list_visits': (UniqueThenListVisitsStrategy, 8192),
+        'unique_then_list_visits_4k': (UniqueThenListVisitsStrategy, 4096),
+        'unique_then_list_visits_wo_allconds_w_values_8k_json': (UniqueThenListVisitsWOAllCondsWithValuesJSONStrategy, 8192),
+        'unique_then_list_visits_wo_allconds_w_values_8k_xml': (UniqueThenListVisitsWOAllCondsWithValuesXMLStrategy, 8192),
+        'unique_then_list_visits_wo_allconds_w_values_8k_yaml': (UniqueThenListVisitsWOAllCondsWithValuesYAMLStrategy, 8192),
+        'unique_events_list_8k': (UniqueEventsListStrategy, 8192), 
+        'unique_events_list_w_time_8k': (UniqueEventsListWithTimeStrategy, 8192), 
+        'unique_events_list_recent_8k': (UniqueEventsListRecentStrategy, 8192), 
+        'unique_events_list_recent_w_time_8k': (UniqueEventsListRecentWithTimeStrategy, 8192), 
+        'unique_codes_list_w_time_8k': (UniqueCodesListWithTimeStrategy, 8192), 
+        'unique_codes_list_8k': (UniqueCodesListStrategy, 8192), 
+        'unique_codes_list_recent_w_time_8k': (UniqueCodesListRecentWithTimeStrategy, 8192), 
+        'unique_codes_list_recent_8k': (UniqueCodesListRecentStrategy, 8192), 
+        'unique_codes_list_recent_4k': (UniqueCodesListRecentStrategy, 4096), 
+        'unique_codes_list_recent_2k': (UniqueCodesListRecentStrategy, 2048), 
+        'unique_codes_list_recent_1k': (UniqueCodesListRecentStrategy, 1024), 
+        'unique_codes_list_recent_512': (UniqueCodesListRecentStrategy, 512), 
+    }
+
+    # Determine serialization strategy and max input length
+    if args.serialization_strategy in strategy_map:
+        strategy_class, max_input_length = strategy_map[args.serialization_strategy]
+        # Process potential ablations
+        if args.serialization_strategy == 'unique_codes_list_recent_8k':
+            serialization_strategy = strategy_class(NUM_AGGREGATED_EVENTS, ablation=ablation)
+        else:
+            serialization_strategy = strategy_class(NUM_AGGREGATED_EVENTS)
+    else:
+        raise ValueError(f"Serialization strategy `{args.serialization_strategy}` not recognized")
+    
+    logger.info(f"Use serialization strategy: {serialization_strategy.__class__}")
+    logger.info(f"    Num aggregated events: {NUM_AGGREGATED_EVENTS}")
+    logger.info(f"    Max input length: {max_input_length}")
+    logger.info(f"    Exclude ontologies: {EXCLUDED_ONTOLOGIES}")
+    logger.info(f"    Ablation: {ablation}")
+    logger.info(f"    Time window: {TIME_WINDOW}")
+    
+    # Mapping of text encoder names to their corresponding classes
+    encoder_mapping = {
+        # NOTE: workaround for LLM2Vec models that are not compatible with most recent transformers library for ModernBERT, Qwen3
+        # 'llm2vec_llama3_1_7b_instruct_supervised': LLM2VecLlama3_1_7B_InstructSupervisedEncoder,
+        # 'llm2vec_llama3_1_7b_instruct_supervised_chunked_2k': lambda max_input_length: LLM2VecLlama3_1_7B_InstructSupervisedChunkedEncoder(max_input_length=2048),
+        # 'llm2vec_llama3_1_7b_instruct_supervised_chunked_1k': lambda max_input_length: LLM2VecLlama3_1_7B_InstructSupervisedChunkedEncoder(max_input_length=1024),
+        # 'llm2vec_llama3_1_7b_instruct_supervised_chunked_512': lambda max_input_length: LLM2VecLlama3_1_7B_InstructSupervisedChunkedEncoder(max_input_length=512),
+        # 'llm2vec_llama2_sheared_1_3b_supervised': LLM2VecLlama2_Sheared_1_3B_SupervisedEncoder,
+        'gteqwen2_7b_instruct': GTEQwen2_7B_InstructEncoder,
+        'gteqwen2_7b_instruct_chunked_2k': lambda max_input_length: GTEQwen2_7B_InstructChunkedEncoder(max_input_length=2048),
+        'gteqwen2_7b_instruct_chunked_1k': lambda max_input_length: GTEQwen2_7B_InstructChunkedEncoder(max_input_length=1024),
+        'gteqwen2_7b_instruct_chunked_512': lambda max_input_length: GTEQwen2_7B_InstructChunkedEncoder(max_input_length=512),
+        'gteqwen2_1_5b_instruct': GTEQwen2_1_5B_InstructEncoder,
+        'qwen3_embedding_8b': Qwen3Embedding_8B_Encoder,
+        'qwen3_embedding_4b': Qwen3Embedding_4B_Encoder,
+        'qwen3_embedding_0_6b': Qwen3Embedding_0_6B_Encoder,
+        # harrier-oss-v1: instruction-conditioned embedding models, same recipe as Qwen3-Embedding
+        'harrier_oss_270m': HarrierOSS_270M_Encoder,
+        'harrier_oss_0_6b': HarrierOSS_0_6B_Encoder,
+        'harrier_oss_27b': HarrierOSS_27B_Encoder,
+        'st_gte_large_en_v15': STGTELargeENv15Encoder,
+        'bioclinicalbert': lambda max_input_length: BertEncoder(max_input_length=max_input_length, bert_identifier='emilyalsentzer/Bio_ClinicalBERT', embedding_size=768, model_max_input_length=512), 
+        'medbert': lambda max_input_length: BertEncoder(max_input_length=max_input_length, bert_identifier='Charangan/MedBERT', embedding_size=768, model_max_input_length=512), 
+        'bert_base': lambda max_input_length: BertEncoder(max_input_length=max_input_length, bert_identifier='bert-base-uncased', embedding_size=768, model_max_input_length=512),
+        'bert_large': lambda max_input_length: BertEncoder(max_input_length=max_input_length, bert_identifier='bert-large-uncased', embedding_size=1024, model_max_input_length=512),
+        'deberta_v3_base': lambda max_input_length: BertEncoder(max_input_length=max_input_length, bert_identifier='microsoft/deberta-v3-base', embedding_size=768, model_max_input_length=512),
+        'deberta_v3_large': lambda max_input_length: BertEncoder(max_input_length=max_input_length, bert_identifier='microsoft/deberta-v3-large', embedding_size=1024, model_max_input_length=512),
+        'bioclinicalbert-concat': lambda max_input_length: BertEncoder(max_input_length=max_input_length, bert_identifier='emilyalsentzer/Bio_ClinicalBERT', embedding_size=768, model_max_input_length=512, concat_embeddings=True),
+        'medbert-concat': lambda max_input_length: BertEncoder(max_input_length=max_input_length, bert_identifier='Charangan/MedBERT', embedding_size=768, model_max_input_length=512, concat_embeddings=True),
+        'bert_base-concat': lambda max_input_length: BertEncoder(max_input_length=max_input_length, bert_identifier='bert-base-uncased', embedding_size=768, model_max_input_length=512, concat_embeddings=True),
+        'bert_large-concat': lambda max_input_length: BertEncoder(max_input_length=max_input_length, bert_identifier='bert-large-uncased', embedding_size=1024, model_max_input_length=512, concat_embeddings=True),
+        'deberta_v3_base-concat': lambda max_input_length: BertEncoder(max_input_length=max_input_length, bert_identifier='microsoft/deberta-v3-base', embedding_size=768, model_max_input_length=512, concat_embeddings=True),
+        'deberta_v3_large-concat': lambda max_input_length: BertEncoder(max_input_length=max_input_length, bert_identifier='microsoft/deberta-v3-large', embedding_size=1024, model_max_input_length=512, concat_embeddings=True),
+        # BioClinical ModernBERT: native 8192-token context (no chunking) and receives the
+        # same instruct+EHR input as the LLM embedding models (include_instruction=True).
+        # mask_mean_pooling because most inputs are shorter than 8192 tokens and ModernBERT
+        # pads them with zeros, which would otherwise be averaged into the embedding.
+        'bioclinical_modernbert_base': lambda max_input_length: BertEncoder(max_input_length=max_input_length, bert_identifier='thomas-sounack/BioClinical-ModernBERT-base', embedding_size=768, model_max_input_length=8192, include_instruction=True, torch_dtype='bfloat16', mask_mean_pooling=True),
+        'bioclinical_modernbert_large': lambda max_input_length: BertEncoder(max_input_length=max_input_length, bert_identifier='thomas-sounack/BioClinical-ModernBERT-large', embedding_size=1024, model_max_input_length=8192, include_instruction=True, torch_dtype='bfloat16', mask_mean_pooling=True),
+    }
+
+    # First check custom llm2vec model, than look up in mapping
+    if args.text_encoder.startswith('llm2vec_llama3_1_7b_instruct_mimic_'):
+        custom_path = args.text_encoder.removeprefix('llm2vec_llama3_1_7b_instruct_mimic_')
+        text_encoder = TextEncoder(LLM2VecLlama3_1_7B_InstructSupervisedEncoder(max_input_length=max_input_length, custom_path=custom_path))
+    elif args.text_encoder in encoder_mapping:
+        text_encoder = TextEncoder(encoder_mapping[args.text_encoder](max_input_length=max_input_length))
+    else:
+        raise ValueError(f"Text encoder `{args.text_encoder}` not recognized")
+    logger.info(f"Use text encoder: {text_encoder.encoder.__class__} with max length: {text_encoder.encoder.max_input_length}")
+        
+    # Load task to instructions json
+    if PATH_TO_TASK_TO_INSTRUCTIONS_FILE:
+        with open(PATH_TO_TASK_TO_INSTRUCTIONS_FILE, 'r') as f:
+            task_to_instructions = json.load(f)
+            assert all([isinstance(v, str) for v in task_to_instructions.values()]), "All values of task_to_instructions must be strings"
+            if set(LABELING_FUNCTION_2_PAPER_NAME.keys()) - set(task_to_instructions.keys()):
+                # Print differences
+                logger.error(f"Task to instructions file does not contain all tasks. Missing: {set(LABELING_FUNCTION_2_PAPER_NAME.keys()) - set(task_to_instructions.keys())}")
+    else:
+        task_to_instructions = {}
+    use_instructions = task_to_instructions is not None
+    logger.info("Use no instructions." if not use_instructions else f"Use instructions from: {PATH_TO_TASK_TO_INSTRUCTIONS_FILE}")
+
+    custom_instruction_prefixes = {
+        'unique_then_list_visits_wo_allconds_w_values_8k_json': "Given a patient's electronic healthcare record (EHR) in JSON format, retrieve relevant passages that answer the query:",
+        'unique_then_list_visits_wo_allconds_w_values_8k_xml': "Given a patient's electronic healthcare record (EHR) in XML format, retrieve relevant passages that answer the query:",
+        'unique_then_list_visits_wo_allconds_w_values_8k_yaml': "Given a patient's electronic healthcare record (EHR) in YAML format, retrieve relevant passages that answer the query:",
+        'unique_events_list_8k': "Given a patient's electronic healthcare record (EHR) as a list of unique events, retrieve relevant passages that answer the query:",
+        'unique_events_list_w_time_8k': "Given a patient's electronic healthcare record (EHR) as a list of unique events with timestamps, retrieve relevant passages that answer the query:",
+    }
+    if args.serialization_strategy in custom_instruction_prefixes:
+        task_to_instructions['instruction_prefix'] = custom_instruction_prefixes[args.serialization_strategy]
+
+    # Add date and time (hh-mm-ss) to name
+    # output_file_name = f'llm_features_{args.text_encoder}_{args.serialization_strategy}{"_instr" if use_instructions else ""}_{datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}.pkl'
+    output_file_name = 'llm_features.pkl'
+    PATH_TO_OUTPUT_FILE = os.path.join(PATH_TO_FEATURES_DIR, output_file_name)
+    # Force refresh
+    check_file_existence_and_handle_force_refresh(PATH_TO_OUTPUT_FILE, IS_FORCE_REFRESH)
+
+    # Load consolidated labels across all patients for all tasks
+    logger.info(f"Loading LabeledPatients from `{PATH_TO_LABELS_FILE}`")
+    patients_to_labels: Dict[int, List[Tuple[datetime, str]]] = load_labeled_patients_with_tasks(PATH_TO_LABELS_FILE)
+    # NOTE Debug: Consider subset of patients
+    # patients_to_labels = {k: v for k, v in list(patients_to_labels.items())[:5]}
+    logger.info(f"Loaded {len(patients_to_labels)} patients with {sum([len(v) for v in patients_to_labels.values()])} labels")
+
+    # Combine two featurizations of each patient: one for the patient's age, and one for the text of every code
+    # they've had in their record up to the prediction timepoint for each label
+    logger.info("Start | Preprocess featurizers")
+    llm_featurizer = LLMFeaturizer(
+        embedding_size=text_encoder.encoder.embedding_size,
+        serialization_strategy=serialization_strategy,
+        task_to_instructions=task_to_instructions,
+        excluded_ontologies=EXCLUDED_ONTOLOGIES,
+        filter_aggregated_events=FILTER_AGGREGATED_EVENTS,
+        time_window=TIME_WINDOW,
+    ) 
+    llm_featurizer = preprocess_llm_featurizer(PATH_TO_PATIENT_DATABASE, llm_featurizer, patients_to_labels, NUM_THREADS)
+
+    logger.info("Finish | Preprocess featurizers")
+    
+    # Run text encoding on serializations of patients - must be done separately to prevent multiprocessing issue with CUDA
+    cache_dir = None
+    if args.text_encoder.startswith('llm2vec_llama'):
+        # Use cache_dir to store embeddings for llm2vec_llama models because otherwise memory allocation error on multiple GPUs
+        cache_dir=PATH_TO_FEATURES_DIR
+    llm_featurizer.encode_serializations(text_encoder, cache_dir=cache_dir)
+    # Encoder not necessary anymore
+    del text_encoder
+
+    # Featurization only performs serial copying of embeddings.
+    # Hence, one thread faster than multiple threads.
+    logger.info("Start | Featurize patients")
+    results = featurize_llm_featurizer(PATH_TO_PATIENT_DATABASE, patients_to_labels, llm_featurizer, num_threads=1)
+    feature_matrix, patient_ids, label_values, label_times, label_tasks = (
+        results[0],
+        results[1],
+        results[2],
+        results[3],
+        results[4],
+    )
+    logger.info("Finish | Featurize patients")
+    
+    # Ensure that all final features sum up to the same value as the generated embeddings
+    assert np.allclose(llm_featurizer.embeddings, feature_matrix)
+
+    # Save results
+    logger.info(f"Saving results to `{PATH_TO_OUTPUT_FILE}`")
+    with open(PATH_TO_OUTPUT_FILE, 'wb') as f:
+        pickle.dump(results, f)
+
+    # Logging
+    logger.info("FeaturizedPatient stats:\n"
+                f"feature_matrix={repr(feature_matrix)}\n"
+                f"patient_ids={repr(patient_ids)}\n"
+                f"label_values={repr(label_values)}\n"
+                f"label_times={repr(label_times)}")
+    logger.success("Done!")
+    

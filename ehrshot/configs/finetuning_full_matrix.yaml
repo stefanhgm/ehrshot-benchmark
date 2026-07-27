@@ -1,0 +1,39 @@
+tasks:
+  - guo_los
+  - guo_readmission
+  - guo_icu
+  - lab_thrombocytopenia
+  - lab_hyperkalemia
+  - lab_hypoglycemia
+  - lab_hyponatremia
+  - lab_anemia
+  - new_hypertension
+  - new_hyperlipidemia
+  - new_pancan
+  - new_celiac
+  - new_lupus
+  - new_acutemi
+  - chexpert_Lung Lesion
+  - chexpert_Pneumothorax
+  - chexpert_Fracture
+  - chexpert_Consolidation
+  - chexpert_Cardiomegaly
+  - chexpert_Enlarged Cardiomediastinum
+  - chexpert_Edema
+  - chexpert_Pneumonia
+  - chexpert_Pleural Other
+  - chexpert_Lung Opacity
+  - chexpert_Atelectasis
+  - chexpert_Pleural Effusion
+  - chexpert_No Finding
+  - chexpert_Support Devices
+
+encoder:
+  model_name: Qwen/Qwen3-Embedding-8B
+  ks: [1, 2, 4, 8, 16, 32, 64, 128]
+  replicates: [0, 1, 2, 3, 4]
+
+decoder:
+  model_name: Qwen/Qwen3-8B
+  ks: [1, 2, 4, 8, 16, 32, 64, 128]
+  replicates: [0, 1, 2, 3, 4]

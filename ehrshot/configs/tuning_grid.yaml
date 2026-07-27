@@ -1,0 +1,194 @@
+# Hyperparameter search scope: guo_* and new_* tasks at k=8/16 only.
+# Paths are relative to ehrshot/bash_scripts/, matching the other wrapper scripts.
+output_dir: ../../EHRSHOT_ASSETS/experiments/tuning
+serializations_path: ../../EHRSHOT_ASSETS/benchmark/serializations_instructions_rebuttal2.pkl
+
+tasks:
+  - guo_los
+  - guo_readmission
+  - guo_icu
+  - new_hypertension
+  - new_hyperlipidemia
+  - new_pancan
+  - new_celiac
+  - new_lupus
+  - new_acutemi
+
+ks:
+  - 8
+  - 16
+
+replicates:
+  - 0
+
+model_names:
+  llm_encoder_ft: Qwen/Qwen3-Embedding-8B
+  llm_decoder_ft: Qwen/Qwen3-8B
+
+config_order:
+  - enc_lr5e5_r8_d000
+  - enc_lr5e5_r8_d005
+  - enc_lr5e5_r8_d010
+  - enc_lr5e5_r16_d000
+  - enc_lr5e5_r16_d005
+  - enc_lr5e5_r16_d010
+  - enc_lr5e5_r64_d000
+  - enc_lr5e5_r64_d005
+  - enc_lr5e5_r64_d010
+  - enc_lr1e4_r8_d000
+  - enc_lr1e4_r8_d005
+  - enc_lr1e4_r8_d010
+  - enc_lr1e4_r16_d000
+  - enc_lr1e4_r16_d005
+  - enc_lr1e4_r16_d010
+  - enc_lr1e4_r64_d000
+  - enc_lr1e4_r64_d005
+  - enc_lr1e4_r64_d010
+  - enc_lr2e4_r8_d000
+  - enc_lr2e4_r8_d005
+  - enc_lr2e4_r8_d010
+  - enc_lr2e4_r16_d000
+  - enc_lr2e4_r16_d005
+  - enc_lr2e4_r16_d010
+  - enc_lr2e4_r64_d000
+  - enc_lr2e4_r64_d005
+  - enc_lr2e4_r64_d010
+  - dec_lr5e5_r8_d000
+  - dec_lr5e5_r8_d005
+  - dec_lr5e5_r8_d010
+  - dec_lr5e5_r16_d000
+  - dec_lr5e5_r16_d005
+  - dec_lr5e5_r16_d010
+  - dec_lr5e5_r64_d000
+  - dec_lr5e5_r64_d005
+  - dec_lr5e5_r64_d010
+  - dec_lr1e4_r8_d000
+  - dec_lr1e4_r8_d005
+  - dec_lr1e4_r8_d010
+  - dec_lr1e4_r16_d000
+  - dec_lr1e4_r16_d005
+  - dec_lr1e4_r16_d010
+  - dec_lr1e4_r64_d000
+  - dec_lr1e4_r64_d005
+  - dec_lr1e4_r64_d010
+  - dec_lr2e4_r8_d000
+  - dec_lr2e4_r8_d005
+  - dec_lr2e4_r8_d010
+  - dec_lr2e4_r16_d000
+  - dec_lr2e4_r16_d005
+  - dec_lr2e4_r16_d010
+  - dec_lr2e4_r64_d000
+  - dec_lr2e4_r64_d005
+  - dec_lr2e4_r64_d010
+
+encoder_configs:
+  - id: enc_lr5e5_r8_d000
+    params: {batch_size: 4, effective_batch_size: 8, lora_r: 8, lora_alpha: 32, lora_dropout: 0.0, lr: 0.00005, warmup_ratio: 0.03, num_train_epochs_cap: 20}
+  - id: enc_lr5e5_r8_d005
+    params: {batch_size: 4, effective_batch_size: 8, lora_r: 8, lora_alpha: 32, lora_dropout: 0.05, lr: 0.00005, warmup_ratio: 0.03, num_train_epochs_cap: 20}
+  - id: enc_lr5e5_r8_d010
+    params: {batch_size: 4, effective_batch_size: 8, lora_r: 8, lora_alpha: 32, lora_dropout: 0.1, lr: 0.00005, warmup_ratio: 0.03, num_train_epochs_cap: 20}
+  - id: enc_lr5e5_r16_d000
+    params: {batch_size: 4, effective_batch_size: 8, lora_r: 16, lora_alpha: 32, lora_dropout: 0.0, lr: 0.00005, warmup_ratio: 0.03, num_train_epochs_cap: 20}
+  - id: enc_lr5e5_r16_d005
+    params: {batch_size: 4, effective_batch_size: 8, lora_r: 16, lora_alpha: 32, lora_dropout: 0.05, lr: 0.00005, warmup_ratio: 0.03, num_train_epochs_cap: 20}
+  - id: enc_lr5e5_r16_d010
+    params: {batch_size: 4, effective_batch_size: 8, lora_r: 16, lora_alpha: 32, lora_dropout: 0.1, lr: 0.00005, warmup_ratio: 0.03, num_train_epochs_cap: 20}
+  - id: enc_lr5e5_r64_d000
+    params: {batch_size: 4, effective_batch_size: 8, lora_r: 64, lora_alpha: 32, lora_dropout: 0.0, lr: 0.00005, warmup_ratio: 0.03, num_train_epochs_cap: 20}
+  - id: enc_lr5e5_r64_d005
+    params: {batch_size: 4, effective_batch_size: 8, lora_r: 64, lora_alpha: 32, lora_dropout: 0.05, lr: 0.00005, warmup_ratio: 0.03, num_train_epochs_cap: 20}
+  - id: enc_lr5e5_r64_d010
+    params: {batch_size: 4, effective_batch_size: 8, lora_r: 64, lora_alpha: 32, lora_dropout: 0.1, lr: 0.00005, warmup_ratio: 0.03, num_train_epochs_cap: 20}
+  - id: enc_lr1e4_r8_d000
+    params: {batch_size: 4, effective_batch_size: 8, lora_r: 8, lora_alpha: 32, lora_dropout: 0.0, lr: 0.0001, warmup_ratio: 0.03, num_train_epochs_cap: 20}
+  - id: enc_lr1e4_r8_d005
+    params: {batch_size: 4, effective_batch_size: 8, lora_r: 8, lora_alpha: 32, lora_dropout: 0.05, lr: 0.0001, warmup_ratio: 0.03, num_train_epochs_cap: 20}
+  - id: enc_lr1e4_r8_d010
+    params: {batch_size: 4, effective_batch_size: 8, lora_r: 8, lora_alpha: 32, lora_dropout: 0.1, lr: 0.0001, warmup_ratio: 0.03, num_train_epochs_cap: 20}
+  - id: enc_lr1e4_r16_d000
+    params: {batch_size: 4, effective_batch_size: 8, lora_r: 16, lora_alpha: 32, lora_dropout: 0.0, lr: 0.0001, warmup_ratio: 0.03, num_train_epochs_cap: 20}
+  - id: enc_lr1e4_r16_d005
+    params: {batch_size: 4, effective_batch_size: 8, lora_r: 16, lora_alpha: 32, lora_dropout: 0.05, lr: 0.0001, warmup_ratio: 0.03, num_train_epochs_cap: 20}
+  - id: enc_lr1e4_r16_d010
+    params: {batch_size: 4, effective_batch_size: 8, lora_r: 16, lora_alpha: 32, lora_dropout: 0.1, lr: 0.0001, warmup_ratio: 0.03, num_train_epochs_cap: 20}
+  - id: enc_lr1e4_r64_d000
+    params: {batch_size: 4, effective_batch_size: 8, lora_r: 64, lora_alpha: 32, lora_dropout: 0.0, lr: 0.0001, warmup_ratio: 0.03, num_train_epochs_cap: 20}
+  - id: enc_lr1e4_r64_d005
+    params: {batch_size: 4, effective_batch_size: 8, lora_r: 64, lora_alpha: 32, lora_dropout: 0.05, lr: 0.0001, warmup_ratio: 0.03, num_train_epochs_cap: 20}
+  - id: enc_lr1e4_r64_d010
+    params: {batch_size: 4, effective_batch_size: 8, lora_r: 64, lora_alpha: 32, lora_dropout: 0.1, lr: 0.0001, warmup_ratio: 0.03, num_train_epochs_cap: 20}
+  - id: enc_lr2e4_r8_d000
+    params: {batch_size: 4, effective_batch_size: 8, lora_r: 8, lora_alpha: 32, lora_dropout: 0.0, lr: 0.0002, warmup_ratio: 0.03, num_train_epochs_cap: 20}
+  - id: enc_lr2e4_r8_d005
+    params: {batch_size: 4, effective_batch_size: 8, lora_r: 8, lora_alpha: 32, lora_dropout: 0.05, lr: 0.0002, warmup_ratio: 0.03, num_train_epochs_cap: 20}
+  - id: enc_lr2e4_r8_d010
+    params: {batch_size: 4, effective_batch_size: 8, lora_r: 8, lora_alpha: 32, lora_dropout: 0.1, lr: 0.0002, warmup_ratio: 0.03, num_train_epochs_cap: 20}
+  - id: enc_lr2e4_r16_d000
+    params: {batch_size: 4, effective_batch_size: 8, lora_r: 16, lora_alpha: 32, lora_dropout: 0.0, lr: 0.0002, warmup_ratio: 0.03, num_train_epochs_cap: 20}
+  - id: enc_lr2e4_r16_d005
+    params: {batch_size: 4, effective_batch_size: 8, lora_r: 16, lora_alpha: 32, lora_dropout: 0.05, lr: 0.0002, warmup_ratio: 0.03, num_train_epochs_cap: 20}
+  - id: enc_lr2e4_r16_d010
+    params: {batch_size: 4, effective_batch_size: 8, lora_r: 16, lora_alpha: 32, lora_dropout: 0.1, lr: 0.0002, warmup_ratio: 0.03, num_train_epochs_cap: 20}
+  - id: enc_lr2e4_r64_d000
+    params: {batch_size: 4, effective_batch_size: 8, lora_r: 64, lora_alpha: 32, lora_dropout: 0.0, lr: 0.0002, warmup_ratio: 0.03, num_train_epochs_cap: 20}
+  - id: enc_lr2e4_r64_d005
+    params: {batch_size: 4, effective_batch_size: 8, lora_r: 64, lora_alpha: 32, lora_dropout: 0.05, lr: 0.0002, warmup_ratio: 0.03, num_train_epochs_cap: 20}
+  - id: enc_lr2e4_r64_d010
+    params: {batch_size: 4, effective_batch_size: 8, lora_r: 64, lora_alpha: 32, lora_dropout: 0.1, lr: 0.0002, warmup_ratio: 0.03, num_train_epochs_cap: 20}
+
+decoder_configs:
+  - id: dec_lr5e5_r8_d000
+    params: {batch_size: 4, effective_batch_size: 8, lora_r: 8, lora_alpha: 32, lora_dropout: 0.0, lr: 0.00005, warmup_ratio: 0.03, num_train_epochs_cap: 20}
+  - id: dec_lr5e5_r8_d005
+    params: {batch_size: 4, effective_batch_size: 8, lora_r: 8, lora_alpha: 32, lora_dropout: 0.05, lr: 0.00005, warmup_ratio: 0.03, num_train_epochs_cap: 20}
+  - id: dec_lr5e5_r8_d010
+    params: {batch_size: 4, effective_batch_size: 8, lora_r: 8, lora_alpha: 32, lora_dropout: 0.1, lr: 0.00005, warmup_ratio: 0.03, num_train_epochs_cap: 20}
+  - id: dec_lr5e5_r16_d000
+    params: {batch_size: 4, effective_batch_size: 8, lora_r: 16, lora_alpha: 32, lora_dropout: 0.0, lr: 0.00005, warmup_ratio: 0.03, num_train_epochs_cap: 20}
+  - id: dec_lr5e5_r16_d005
+    params: {batch_size: 4, effective_batch_size: 8, lora_r: 16, lora_alpha: 32, lora_dropout: 0.05, lr: 0.00005, warmup_ratio: 0.03, num_train_epochs_cap: 20}
+  - id: dec_lr5e5_r16_d010
+    params: {batch_size: 4, effective_batch_size: 8, lora_r: 16, lora_alpha: 32, lora_dropout: 0.1, lr: 0.00005, warmup_ratio: 0.03, num_train_epochs_cap: 20}
+  - id: dec_lr5e5_r64_d000
+    params: {batch_size: 4, effective_batch_size: 8, lora_r: 64, lora_alpha: 32, lora_dropout: 0.0, lr: 0.00005, warmup_ratio: 0.03, num_train_epochs_cap: 20}
+  - id: dec_lr5e5_r64_d005
+    params: {batch_size: 4, effective_batch_size: 8, lora_r: 64, lora_alpha: 32, lora_dropout: 0.05, lr: 0.00005, warmup_ratio: 0.03, num_train_epochs_cap: 20}
+  - id: dec_lr5e5_r64_d010
+    params: {batch_size: 4, effective_batch_size: 8, lora_r: 64, lora_alpha: 32, lora_dropout: 0.1, lr: 0.00005, warmup_ratio: 0.03, num_train_epochs_cap: 20}
+  - id: dec_lr1e4_r8_d000
+    params: {batch_size: 4, effective_batch_size: 8, lora_r: 8, lora_alpha: 32, lora_dropout: 0.0, lr: 0.0001, warmup_ratio: 0.03, num_train_epochs_cap: 20}
+  - id: dec_lr1e4_r8_d005
+    params: {batch_size: 4, effective_batch_size: 8, lora_r: 8, lora_alpha: 32, lora_dropout: 0.05, lr: 0.0001, warmup_ratio: 0.03, num_train_epochs_cap: 20}
+  - id: dec_lr1e4_r8_d010
+    params: {batch_size: 4, effective_batch_size: 8, lora_r: 8, lora_alpha: 32, lora_dropout: 0.1, lr: 0.0001, warmup_ratio: 0.03, num_train_epochs_cap: 20}
+  - id: dec_lr1e4_r16_d000
+    params: {batch_size: 4, effective_batch_size: 8, lora_r: 16, lora_alpha: 32, lora_dropout: 0.0, lr: 0.0001, warmup_ratio: 0.03, num_train_epochs_cap: 20}
+  - id: dec_lr1e4_r16_d005
+    params: {batch_size: 4, effective_batch_size: 8, lora_r: 16, lora_alpha: 32, lora_dropout: 0.05, lr: 0.0001, warmup_ratio: 0.03, num_train_epochs_cap: 20}
+  - id: dec_lr1e4_r16_d010
+    params: {batch_size: 4, effective_batch_size: 8, lora_r: 16, lora_alpha: 32, lora_dropout: 0.1, lr: 0.0001, warmup_ratio: 0.03, num_train_epochs_cap: 20}
+  - id: dec_lr1e4_r64_d000
+    params: {batch_size: 4, effective_batch_size: 8, lora_r: 64, lora_alpha: 32, lora_dropout: 0.0, lr: 0.0001, warmup_ratio: 0.03, num_train_epochs_cap: 20}
+  - id: dec_lr1e4_r64_d005
+    params: {batch_size: 4, effective_batch_size: 8, lora_r: 64, lora_alpha: 32, lora_dropout: 0.05, lr: 0.0001, warmup_ratio: 0.03, num_train_epochs_cap: 20}
+  - id: dec_lr1e4_r64_d010
+    params: {batch_size: 4, effective_batch_size: 8, lora_r: 64, lora_alpha: 32, lora_dropout: 0.1, lr: 0.0001, warmup_ratio: 0.03, num_train_epochs_cap: 20}
+  - id: dec_lr2e4_r8_d000
+    params: {batch_size: 4, effective_batch_size: 8, lora_r: 8, lora_alpha: 32, lora_dropout: 0.0, lr: 0.0002, warmup_ratio: 0.03, num_train_epochs_cap: 20}
+  - id: dec_lr2e4_r8_d005
+    params: {batch_size: 4, effective_batch_size: 8, lora_r: 8, lora_alpha: 32, lora_dropout: 0.05, lr: 0.0002, warmup_ratio: 0.03, num_train_epochs_cap: 20}
+  - id: dec_lr2e4_r8_d010
+    params: {batch_size: 4, effective_batch_size: 8, lora_r: 8, lora_alpha: 32, lora_dropout: 0.1, lr: 0.0002, warmup_ratio: 0.03, num_train_epochs_cap: 20}
+  - id: dec_lr2e4_r16_d000
+    params: {batch_size: 4, effective_batch_size: 8, lora_r: 16, lora_alpha: 32, lora_dropout: 0.0, lr: 0.0002, warmup_ratio: 0.03, num_train_epochs_cap: 20}
+  - id: dec_lr2e4_r16_d005
+    params: {batch_size: 4, effective_batch_size: 8, lora_r: 16, lora_alpha: 32, lora_dropout: 0.05, lr: 0.0002, warmup_ratio: 0.03, num_train_epochs_cap: 20}
+  - id: dec_lr2e4_r16_d010
+    params: {batch_size: 4, effective_batch_size: 8, lora_r: 16, lora_alpha: 32, lora_dropout: 0.1, lr: 0.0002, warmup_ratio: 0.03, num_train_epochs_cap: 20}
+  - id: dec_lr2e4_r64_d000
+    params: {batch_size: 4, effective_batch_size: 8, lora_r: 64, lora_alpha: 32, lora_dropout: 0.0, lr: 0.0002, warmup_ratio: 0.03, num_train_epochs_cap: 20}
+  - id: dec_lr2e4_r64_d005
+    params: {batch_size: 4, effective_batch_size: 8, lora_r: 64, lora_alpha: 32, lora_dropout: 0.05, lr: 0.0002, warmup_ratio: 0.03, num_train_epochs_cap: 20}
+  - id: dec_lr2e4_r64_d010
+    params: {batch_size: 4, effective_batch_size: 8, lora_r: 64, lora_alpha: 32, lora_dropout: 0.1, lr: 0.0002, warmup_ratio: 0.03, num_train_epochs_cap: 20}

@@ -1,0 +1,97 @@
+{
+  "config_id": "dec_lr2e4_r8_d005",
+  "ks": [
+    8,
+    16
+  ],
+  "mean_val_auroc": 0.6713324652777778,
+  "selected_configs": [
+    {
+      "k": 8,
+      "sub_task": "guo_icu"
+    },
+    {
+      "k": 16,
+      "sub_task": "guo_icu"
+    },
+    {
+      "k": 8,
+      "sub_task": "guo_los"
+    },
+    {
+      "k": 16,
+      "sub_task": "guo_los"
+    },
+    {
+      "k": 8,
+      "sub_task": "guo_readmission"
+    },
+    {
+      "k": 16,
+      "sub_task": "guo_readmission"
+    },
+    {
+      "k": 8,
+      "sub_task": "new_acutemi"
+    },
+    {
+      "k": 16,
+      "sub_task": "new_acutemi"
+    },
+    {
+      "k": 8,
+      "sub_task": "new_celiac"
+    },
+    {
+      "k": 16,
+      "sub_task": "new_celiac"
+    },
+    {
+      "k": 8,
+      "sub_task": "new_hyperlipidemia"
+    },
+    {
+      "k": 16,
+      "sub_task": "new_hyperlipidemia"
+    },
+    {
+      "k": 8,
+      "sub_task": "new_hypertension"
+    },
+    {
+      "k": 16,
+      "sub_task": "new_hypertension"
+    },
+    {
+      "k": 8,
+      "sub_task": "new_lupus"
+    },
+    {
+      "k": 16,
+      "sub_task": "new_lupus"
+    },
+    {
+      "k": 8,
+      "sub_task": "new_pancan"
+    },
+    {
+      "k": 16,
+      "sub_task": "new_pancan"
+    }
+  ],
+  "selection_metric": "auroc",
+  "task_prefixes": [
+    "guo_",
+    "new_"
+  ],
+  "tuned_hparams": {
+    "batch_size": 4,
+    "effective_batch_size": 8,
+    "lora_alpha": 32,
+    "lora_dropout": 0.05,
+    "lora_r": 8,
+    "lr": 0.0002,
+    "num_train_epochs_cap": 20,
+    "warmup_ratio": 0.03
+  }
+}
